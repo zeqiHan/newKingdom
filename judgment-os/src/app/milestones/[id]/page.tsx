@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMilestoneWorkspace } from "@/lib/db/queries";
-import type { BeliefUpdate } from "@/lib/db/types";
+import type { BeliefUpdate, Decision } from "@/lib/db/types";
 import { createEvidenceAction, reviewBeliefUpdateAction } from "./actions";
+import {
+  confirmDecisionChoiceAction,
+  reopenDecisionAction,
+} from "./decision-actions";
+import { DecisionGatePanel } from "./decision-gate-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +52,12 @@ const DECISION_STATUS: Record<string, string> = {
   PROVISIONAL: "临时",
   FROZEN: "已冻结",
   REOPENED: "已重开",
+};
+
+const GATE_LABEL: Record<string, string> = {
+  KEEP_RESEARCHING: "继续调研",
+  MAKE_PROVISIONAL_DECISION: "可做临时决定",
+  READY_TO_FREEZE: "可冻结决定",
 };
 
 function BeliefUpdateBlock({
@@ -180,6 +191,237 @@ function BeliefUpdateBlock({
   );
 }
 
+function DecisionGateResult({
+  decision,
+  milestoneId,
+}: {
+  decision: Decision;
+  milestoneId: string;
+}) {
+  const canChoose =
+    decision.status === "OPEN" || decision.status === "REOPENED";
+  const canReopen =
+    decision.status === "PROVISIONAL" || decision.status === "FROZEN";
+  const gate = decision.gate_recommendation;
+
+  return (
+    <div className="space-y-4 text-sm">
+      {gate ? (
+        <div className="space-y-2 border border-black/10 p-3 dark:border-white/10">
+          <p className="font-medium">
+            Decision Gate：{GATE_LABEL[gate] ?? gate}
+          </p>
+          <p>
+            <span className="font-medium">WHY：</span>
+            {decision.gate_why || decision.reasoning}
+          </p>
+          {decision.blocked_decision ? (
+            <p>
+              <span className="font-medium">被阻塞的决策：</span>
+              {decision.blocked_decision}
+            </p>
+          ) : null}
+          <p>
+            <span className="font-medium">再收集信息的价值：</span>
+            {decision.value_of_more_info || "—"}
+          </p>
+          <p>
+            <span className="font-medium">等待代价：</span>
+            {decision.cost_of_waiting || "—"}
+          </p>
+          <p>
+            <span className="font-medium">做错代价：</span>
+            {decision.cost_of_being_wrong || "—"}
+          </p>
+          <p>
+            <span className="font-medium">可逆性：</span>
+            {decision.reversibility || "—"}
+          </p>
+          <p>
+            <span className="font-medium">额外信息是否可能改变行动：</span>
+            {decision.would_info_change_action || "—"}
+          </p>
+        </div>
+      ) : null}
+
+      <div>
+        <p className="font-medium">当前选项</p>
+        <ul className="mt-2 space-y-3">
+          {decision.options.map((opt) => {
+            const selected = decision.selected_option?.id === opt.id;
+            const aiPick = decision.ai_recommendation?.optionId === opt.id;
+            return (
+              <li
+                key={opt.id}
+                className="border border-black/10 p-3 dark:border-white/10"
+              >
+                <p>
+                  {selected ? "→ " : ""}
+                  <span className="font-medium">{opt.label}</span>
+                  {selected ? "（你的选择）" : ""}
+                  {aiPick ? " · AI 推荐" : ""}
+                </p>
+                {opt.description ? (
+                  <p className="mt-1 text-xs text-black/60 dark:text-white/60">
+                    {opt.description}
+                  </p>
+                ) : null}
+                {opt.bestEvidence && opt.bestEvidence.length > 0 ? (
+                  <div className="mt-2 text-xs">
+                    <p className="font-medium">支持证据：</p>
+                    <ul className="list-disc pl-4">
+                      {opt.bestEvidence.map((ev, i) => (
+                        <li key={i}>{ev}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      {decision.tradeoffs.length > 0 ? (
+        <div>
+          <p className="font-medium">关键权衡</p>
+          <ul className="mt-1 list-disc pl-5">
+            {decision.tradeoffs.map((t, i) => (
+              <li key={i}>{t}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {decision.unknowns_at_time.length > 0 ? (
+        <div>
+          <p className="font-medium">仍未知</p>
+          <ul className="mt-1 list-disc pl-5">
+            {decision.unknowns_at_time.map((u, i) => (
+              <li key={i}>{String(u)}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {decision.ai_recommendation ? (
+        <div className="border border-dashed border-black/20 p-3 text-xs dark:border-white/20">
+          <p className="font-medium text-sm">AI 推荐（论据，不是命令）</p>
+          <p className="mt-1">
+            {decision.ai_recommendation.label
+              ? `倾向：${decision.ai_recommendation.label}`
+              : "倾向：继续调研 / 暂不锁定选项"}
+          </p>
+          <p className="mt-1">{decision.ai_recommendation.reasoning}</p>
+        </div>
+      ) : null}
+
+      <p className="text-xs text-black/40 dark:text-white/40">
+        状态：{DECISION_STATUS[decision.status] ?? decision.status}
+        {decision.user_choice_note
+          ? ` · 你的说明：${decision.user_choice_note}`
+          : ""}
+      </p>
+
+      {canChoose ? (
+        <form
+          action={confirmDecisionChoiceAction}
+          className="space-y-2 border border-black/10 p-3 dark:border-white/10"
+        >
+          <p className="font-medium">由你选择（可覆盖 AI）</p>
+          <input type="hidden" name="milestone_id" value={milestoneId} />
+          <input type="hidden" name="decision_id" value={decision.id} />
+          <label className="block space-y-1">
+            选项
+            <select
+              name="option_id"
+              required
+              defaultValue={decision.ai_recommendation?.optionId ?? ""}
+              className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+            >
+              <option value="" disabled>
+                选择一项
+              </option>
+              {decision.options.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block space-y-1">
+            决定强度
+            <select
+              name="status"
+              defaultValue={
+                gate === "READY_TO_FREEZE" ? "FROZEN" : "PROVISIONAL"
+              }
+              className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+            >
+              <option value="PROVISIONAL">临时决定（可修订）</option>
+              <option value="FROZEN">冻结决定</option>
+            </select>
+          </label>
+          <label className="block space-y-1">
+            你的理由（可选）
+            <textarea
+              name="user_choice_note"
+              rows={2}
+              className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+            />
+          </label>
+          <p className="text-xs text-black/50 dark:text-white/50">
+            即使 AI 建议继续调研，你仍可主动做出临时/冻结决定；代价已在上方显式列出。
+          </p>
+          <button
+            type="submit"
+            className="border border-black/30 px-3 py-1 dark:border-white/30"
+          >
+            确认我的选择
+          </button>
+        </form>
+      ) : null}
+
+      {canReopen ? (
+        <form action={reopenDecisionAction}>
+          <input type="hidden" name="milestone_id" value={milestoneId} />
+          <input type="hidden" name="decision_id" value={decision.id} />
+          <button
+            type="submit"
+            className="border border-black/30 px-3 py-1 text-sm dark:border-white/30"
+          >
+            重开决策
+          </button>
+        </form>
+      ) : null}
+
+      {decision.history.length > 0 ? (
+        <details>
+          <summary className="cursor-pointer text-xs">
+            历史版本（{decision.history.length}）
+          </summary>
+          <ul className="mt-2 space-y-2 text-xs text-black/60 dark:text-white/60">
+            {decision.history.map((h, i) => (
+              <li
+                key={i}
+                className="border border-black/10 p-2 dark:border-white/10"
+              >
+                <p>
+                  {h.at} · {DECISION_STATUS[h.status] ?? h.status}
+                  {h.selected_option
+                    ? ` · 曾选 ${h.selected_option.label}`
+                    : ""}
+                </p>
+                <p className="mt-1">{h.reasoning}</p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 export default async function MilestonePage({ params }: MilestonePageProps) {
   const { id } = await params;
   const workspace = await getMilestoneWorkspace(id);
@@ -195,6 +437,9 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
     feedback,
   } = workspace;
   const decision = decisions[0] ?? null;
+  const lockedByActiveDecision = decisions.some(
+    (d) => d.status === "PROVISIONAL" || d.status === "FROZEN",
+  );
 
   const latestBelief = Object.values(beliefUpdatesByEvidenceId).sort((a, b) =>
     a.created_at < b.created_at ? 1 : -1,
@@ -382,35 +627,22 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium tracking-wide text-black/50 dark:text-white/50">
-          决策
+          决策 · Decision Gate
         </h2>
+        <DecisionGatePanel
+          milestoneId={milestone.id}
+          hasUncertainty={Boolean(uncertainty)}
+          lockedByActiveDecision={lockedByActiveDecision}
+        />
         {!decision ? (
-          <p className="text-sm text-black/50 dark:text-white/50">暂无决策。</p>
+          <p className="text-sm text-black/50 dark:text-white/50">
+            暂无决策。有证据与信念更新后，可运行 Decision Gate。
+          </p>
         ) : (
-          <div className="space-y-3 text-sm">
-            <p>{decision.question}</p>
-            <ul className="space-y-1">
-              {decision.options.map((opt) => {
-                const selected = decision.selected_option?.id === opt.id;
-                return (
-                  <li key={opt.id}>
-                    {selected ? "→ " : "  "}
-                    {opt.label}
-                    {selected ? "（已选）" : ""}
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="text-xs text-black/40 dark:text-white/40">
-              状态：{DECISION_STATUS[decision.status] ?? decision.status}
-              {" · 信心 "}
-              {decision.confidence}
-            </p>
-            <p>
-              <span className="font-medium">理由：</span>
-              {decision.reasoning}
-            </p>
-          </div>
+          <DecisionGateResult
+            decision={decision}
+            milestoneId={milestone.id}
+          />
         )}
       </section>
 

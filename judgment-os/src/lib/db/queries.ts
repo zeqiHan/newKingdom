@@ -22,7 +22,10 @@ import type {
   SupportsOrChallenges,
   Uncertainty,
 } from "./types";
-import type { BeliefUpdateAnalysis } from "@/lib/decision-engine";
+import type {
+  BeliefUpdateAnalysis,
+  DecisionGateEvaluation,
+} from "@/lib/decision-engine";
 
 function mapProject(row: typeof projects.$inferSelect): Project {
   return {
@@ -86,6 +89,7 @@ function mapDecision(row: typeof decisions.$inferSelect): Decision {
     id: row.id,
     project_id: row.projectId,
     milestone_id: row.milestoneId,
+    uncertainty_id: row.uncertaintyId ?? null,
     question: row.question,
     options: (row.options ?? []) as DecisionOption[],
     selected_option: (row.selectedOption ?? null) as DecisionOption | null,
@@ -96,6 +100,20 @@ function mapDecision(row: typeof decisions.$inferSelect): Decision {
     unknowns_at_time: (row.unknownsAtTime ?? []) as unknown[],
     confidence_at_time: row.confidenceAtTime,
     deadline_at_time: row.deadlineAtTime,
+    gate_recommendation: (row.gateRecommendation ??
+      null) as Decision["gate_recommendation"],
+    gate_why: row.gateWhy ?? "",
+    blocked_decision: row.blockedDecision ?? "",
+    tradeoffs: (row.tradeoffs ?? []) as string[],
+    cost_of_waiting: row.costOfWaiting ?? "",
+    cost_of_being_wrong: row.costOfBeingWrong ?? "",
+    value_of_more_info: row.valueOfMoreInfo ?? "",
+    reversibility: row.reversibility ?? "",
+    would_info_change_action: row.wouldInfoChangeAction ?? "",
+    ai_recommendation: (row.aiRecommendation ??
+      null) as Decision["ai_recommendation"],
+    user_choice_note: row.userChoiceNote ?? null,
+    history: (row.history ?? []) as Decision["history"],
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
@@ -599,6 +617,184 @@ export async function listDecisionsForMilestone(
     .where(eq(decisions.milestoneId, milestoneId))
     .orderBy(desc(decisions.createdAt));
   return rows.map(mapDecision);
+}
+
+export async function getDecision(id: string): Promise<Decision | null> {
+  const db = await getReadyDb();
+  const rows = await db
+    .select()
+    .from(decisions)
+    .where(eq(decisions.id, id))
+    .limit(1);
+  return rows[0] ? mapDecision(rows[0]) : null;
+}
+
+export async function updateMilestoneStatus(
+  milestoneId: string,
+  status: Milestone["status"],
+): Promise<Milestone | null> {
+  const db = await getReadyDb();
+  const rows = await db
+    .update(milestones)
+    .set({
+      status,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(milestones.id, milestoneId))
+    .returning();
+  return rows[0] ? mapMilestone(rows[0]) : null;
+}
+
+/**
+ * Persist Decision Gate evaluation as OPEN (AI recommends; human has not chosen).
+ * Updates an existing OPEN/REOPENED row on this milestone; otherwise inserts.
+ */
+export async function saveDecisionFromGate(input: {
+  project_id: string;
+  milestone_id: string;
+  uncertainty_id: string | null;
+  evaluation: DecisionGateEvaluation;
+  evidence_at_time: unknown[];
+  confidence_at_time: number | null;
+  deadline_at_time: string | null;
+}): Promise<Decision> {
+  const db = await getReadyDb();
+  const e = input.evaluation;
+  const existingList = await listDecisionsForMilestone(input.milestone_id);
+  const target = existingList.find(
+    (d) => d.status === "OPEN" || d.status === "REOPENED",
+  );
+
+  const values = {
+    projectId: input.project_id,
+    milestoneId: input.milestone_id,
+    uncertaintyId: input.uncertainty_id,
+    question: e.blockedDecision,
+    options: e.options.map((o) => ({
+      id: o.id,
+      label: o.label,
+      description: o.description,
+      bestEvidence: o.bestEvidence,
+    })),
+    selectedOption: null as DecisionOption | null,
+    reasoning: e.why,
+    confidence: input.confidence_at_time ?? 0,
+    status: "OPEN" as const,
+    evidenceAtTime: input.evidence_at_time,
+    unknownsAtTime: e.remainingUnknowns,
+    confidenceAtTime: input.confidence_at_time,
+    deadlineAtTime: input.deadline_at_time,
+    gateRecommendation: e.recommendation,
+    gateWhy: e.why,
+    blockedDecision: e.blockedDecision,
+    tradeoffs: e.tradeoffs,
+    costOfWaiting: e.costOfWaiting,
+    costOfBeingWrong: e.costOfBeingWrong,
+    valueOfMoreInfo: e.valueOfMoreInfo,
+    reversibility: e.reversibility,
+    wouldInfoChangeAction: e.wouldInfoChangeAction,
+    aiRecommendation: e.aiRecommendation,
+    userChoiceNote: null as string | null,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (target) {
+    const rows = await db
+      .update(decisions)
+      .set({
+        ...values,
+        // Preserve reopen history; clear prior selection on new gate.
+        history: target.history,
+      })
+      .where(eq(decisions.id, target.id))
+      .returning();
+    return mapDecision(rows[0]);
+  }
+
+  const rows = await db
+    .insert(decisions)
+    .values({
+      ...values,
+      history: [],
+    })
+    .returning();
+
+  return mapDecision(rows[0]);
+}
+
+export async function confirmDecisionChoice(input: {
+  decision_id: string;
+  option_id: string;
+  /** Human may choose PROVISIONAL or FROZEN regardless of AI gate. */
+  status: "PROVISIONAL" | "FROZEN";
+  user_choice_note?: string | null;
+}): Promise<Decision> {
+  const db = await getReadyDb();
+  const existing = await getDecision(input.decision_id);
+  if (!existing) throw new Error("Decision not found.");
+
+  const option =
+    existing.options.find((o) => o.id === input.option_id) ?? null;
+  if (!option) throw new Error("Selected option not found on this decision.");
+
+  const rows = await db
+    .update(decisions)
+    .set({
+      selectedOption: option,
+      status: input.status,
+      userChoiceNote: input.user_choice_note?.trim() || null,
+      // Keep AI why; append human note into reasoning for auditability.
+      reasoning: [
+        existing.gate_why || existing.reasoning,
+        input.user_choice_note?.trim()
+          ? `用户选择说明：${input.user_choice_note.trim()}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(decisions.id, input.decision_id))
+    .returning();
+
+  return mapDecision(rows[0]);
+}
+
+/**
+ * Reopen a decision: mark REOPENED and append a history snapshot.
+ * Original choice + reasoning remain in history and on the row until a new gate run.
+ */
+export async function reopenDecision(
+  decisionId: string,
+): Promise<Decision> {
+  const db = await getReadyDb();
+  const existing = await getDecision(decisionId);
+  if (!existing) throw new Error("Decision not found.");
+
+  const snapshot: Decision["history"][number] = {
+    at: new Date().toISOString(),
+    status: existing.status,
+    selected_option: existing.selected_option,
+    reasoning: existing.reasoning,
+    gate_recommendation: existing.gate_recommendation,
+    gate_why: existing.gate_why,
+    ai_recommendation: existing.ai_recommendation,
+    user_choice_note: existing.user_choice_note,
+    evidence_at_time: existing.evidence_at_time,
+    unknowns_at_time: existing.unknowns_at_time,
+  };
+
+  const rows = await db
+    .update(decisions)
+    .set({
+      status: "REOPENED",
+      history: [...existing.history, snapshot],
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(decisions.id, decisionId))
+    .returning();
+
+  return mapDecision(rows[0]);
 }
 
 export async function listFeedbackForMilestone(

@@ -40,6 +40,11 @@ export type BeliefUpdateReviewStatus =
 
 export type DecisionStatus = "OPEN" | "PROVISIONAL" | "FROZEN" | "REOPENED";
 
+export type GateRecommendation =
+  | "KEEP_RESEARCHING"
+  | "MAKE_PROVISIONAL_DECISION"
+  | "READY_TO_FREEZE";
+
 export interface Project {
   id: string;
   title: string;
@@ -93,12 +98,33 @@ export interface DecisionOption {
   id: string;
   label: string;
   description?: string;
+  bestEvidence?: string[];
+}
+
+export interface AiDecisionRecommendation {
+  optionId: string | null;
+  label: string | null;
+  reasoning: string;
+}
+
+export interface DecisionHistoryEntry {
+  at: string;
+  status: DecisionStatus;
+  selected_option: DecisionOption | null;
+  reasoning: string;
+  gate_recommendation: GateRecommendation | null;
+  gate_why: string;
+  ai_recommendation: AiDecisionRecommendation | null;
+  user_choice_note: string | null;
+  evidence_at_time: unknown[];
+  unknowns_at_time: unknown[];
 }
 
 export interface Decision {
   id: string;
   project_id: string;
   milestone_id: string;
+  uncertainty_id: string | null;
   question: string;
   options: DecisionOption[];
   selected_option: DecisionOption | null;
@@ -109,6 +135,18 @@ export interface Decision {
   unknowns_at_time: unknown[];
   confidence_at_time: number | null;
   deadline_at_time: string | null;
+  gate_recommendation: GateRecommendation | null;
+  gate_why: string;
+  blocked_decision: string;
+  tradeoffs: string[];
+  cost_of_waiting: string;
+  cost_of_being_wrong: string;
+  value_of_more_info: string;
+  reversibility: string;
+  would_info_change_action: string;
+  ai_recommendation: AiDecisionRecommendation | null;
+  user_choice_note: string | null;
+  history: DecisionHistoryEntry[];
   created_at: string;
   updated_at: string;
 }

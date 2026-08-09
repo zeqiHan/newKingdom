@@ -136,6 +136,7 @@ CREATE TABLE decisions (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id          UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   milestone_id        UUID NOT NULL REFERENCES milestones(id) ON DELETE CASCADE,
+  uncertainty_id      UUID REFERENCES uncertainties(id) ON DELETE SET NULL,
   question            TEXT NOT NULL,
   options             JSONB NOT NULL DEFAULT '[]'::jsonb,
   selected_option     JSONB,
@@ -147,12 +148,26 @@ CREATE TABLE decisions (
   unknowns_at_time    JSONB NOT NULL DEFAULT '[]'::jsonb,
   confidence_at_time  INTEGER,
   deadline_at_time    TIMESTAMPTZ,
+  -- Decision Gate (Belief Update → Decision Point)
+  gate_recommendation TEXT,
+  gate_why            TEXT NOT NULL DEFAULT '',
+  blocked_decision    TEXT NOT NULL DEFAULT '',
+  tradeoffs           JSONB NOT NULL DEFAULT '[]'::jsonb,
+  cost_of_waiting     TEXT NOT NULL DEFAULT '',
+  cost_of_being_wrong TEXT NOT NULL DEFAULT '',
+  value_of_more_info  TEXT NOT NULL DEFAULT '',
+  reversibility       TEXT NOT NULL DEFAULT '',
+  would_info_change_action TEXT NOT NULL DEFAULT '',
+  ai_recommendation   JSONB,
+  user_choice_note    TEXT,
+  history             JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX decisions_project_id_idx ON decisions(project_id);
 CREATE INDEX decisions_milestone_id_idx ON decisions(milestone_id);
+CREATE INDEX decisions_uncertainty_id_idx ON decisions(uncertainty_id);
 
 -- ---------------------------------------------------------------------------
 -- Feedback

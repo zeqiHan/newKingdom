@@ -131,15 +131,26 @@ export const decisions = pgTable("decisions", {
   milestoneId: uuid("milestone_id")
     .notNull()
     .references(() => milestones.id, { onDelete: "cascade" }),
+  uncertaintyId: uuid("uncertainty_id").references(() => uncertainties.id, {
+    onDelete: "set null",
+  }),
   question: text("question").notNull(),
   options: jsonb("options")
-    .$type<{ id: string; label: string; description?: string }[]>()
+    .$type<
+      {
+        id: string;
+        label: string;
+        description?: string;
+        bestEvidence?: string[];
+      }[]
+    >()
     .notNull()
     .default(sql`'[]'::jsonb`),
   selectedOption: jsonb("selected_option").$type<{
     id: string;
     label: string;
     description?: string;
+    bestEvidence?: string[];
   } | null>(),
   reasoning: text("reasoning").notNull().default(""),
   confidence: integer("confidence").notNull().default(0),
@@ -157,6 +168,31 @@ export const decisions = pgTable("decisions", {
     withTimezone: true,
     mode: "string",
   }),
+  /** Decision Gate fields */
+  gateRecommendation: text("gate_recommendation"),
+  gateWhy: text("gate_why").notNull().default(""),
+  blockedDecision: text("blocked_decision").notNull().default(""),
+  tradeoffs: jsonb("tradeoffs")
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  costOfWaiting: text("cost_of_waiting").notNull().default(""),
+  costOfBeingWrong: text("cost_of_being_wrong").notNull().default(""),
+  valueOfMoreInfo: text("value_of_more_info").notNull().default(""),
+  reversibility: text("reversibility").notNull().default(""),
+  wouldInfoChangeAction: text("would_info_change_action")
+    .notNull()
+    .default(""),
+  aiRecommendation: jsonb("ai_recommendation").$type<{
+    optionId: string | null;
+    label: string | null;
+    reasoning: string;
+  } | null>(),
+  userChoiceNote: text("user_choice_note"),
+  history: jsonb("history")
+    .$type<unknown[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
   ...timestamps,
 });
 

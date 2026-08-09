@@ -13,3 +13,11 @@ export type {
   SupportsOrChallenges,
 } from "./belief-update-types";
 export { analyzeEvidenceBeliefUpdate } from "./analyze-evidence";
+export type {
+  AiDecisionRecommendation,
+  DecisionGateEvaluation,
+  DecisionGateOption,
+  DecisionHistoryEntry,
+  GateRecommendation,
+} from "./decision-gate-types";
+export { evaluateDecisionGate } from "./evaluate-decision-gate";

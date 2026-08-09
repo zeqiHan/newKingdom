@@ -42,3 +42,4 @@ After code is pushed, redeploy so the new Postgres client ships.
 - Free tier: ~500MB DB, may pause after ~7 days idle
 - Redeploying the **app** no longer wipes project data (data lives in Supabase)
 - Do not commit real connection strings
+- Schema upgrades: run `db/migrations/*.sql` in SQL Editor (e.g. `002_decision_gate.sql`) or `npm run db:migrate -- db/migrations/002_decision_gate.sql`
