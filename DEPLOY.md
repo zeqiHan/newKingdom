@@ -1,21 +1,11 @@
 # Deploy (AI Builders)
 
-JudgmentOS can be deployed to `ai-builders.space` from this public repo.
+Public URL: https://judgment-os.ai-builders.space/
 
-## Requirements met
+## Database
 
-- Root `Dockerfile` (builds `judgment-os/`)
-- Listens on `PORT` via Next.js standalone (`HOSTNAME=0.0.0.0`)
-- Single process
-- Uses injected `AI_BUILDER_TOKEN` for LLM calls (no secret in `env_vars`)
-- Health check: `GET /api/health`
-
-## Limits to know
-
-- **256 MB RAM** nano instance — keep the app lean; cold starts may be slow
-- **SQLite is ephemeral** — data lives in the container and **resets on redeploy**
-- Repo must stay **public** for AI Builders deploy
-- First deploy locks `repo_url` to this GitHub repo for that `service_name`
+JudgmentOS uses **Supabase Postgres** (`DATABASE_URL`).  
+See [SUPABASE.md](SUPABASE.md). Redeploying the app **does not** wipe project data.
 
 ## Deploy parameters
 
@@ -23,14 +13,14 @@ JudgmentOS can be deployed to `ai-builders.space` from this public repo.
 | --- | --- |
 | `repo_url` | `https://github.com/zeqiHan/newKingdom` |
 | `branch` | `master` |
-| `service_name` | e.g. `judgment-os` → `https://judgment-os.ai-builders.space` |
-| `env_vars` | optional non-secrets only, e.g. `LLM_MODEL=grok-4-fast` |
+| `service_name` | `judgment-os` |
+| `env_vars` | `DATABASE_URL` = Supabase URI (required). Optional: `LLM_MODEL`, etc. |
 
 Do **not** put `AI_BUILDER_TOKEN` in `env_vars` — the platform injects it.
 
-## After push
+## After schema + code push
 
-1. Commit + push Dockerfile and app changes
-2. Call deploy API / ask Cursor to deploy
-3. Wait 5–10 minutes; check logs if needed
-4. Open `https://{service_name}.ai-builders.space/projects`
+1. Apply `judgment-os/db/schema.sql` in Supabase SQL Editor (first time)
+2. Commit + push
+3. Redeploy with `DATABASE_URL` set
+4. Open https://judgment-os.ai-builders.space/projects

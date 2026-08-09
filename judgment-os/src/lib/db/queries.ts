@@ -428,7 +428,7 @@ export async function saveBeliefUpdate(input: {
     .update(uncertainties)
     .set({
       currentConfidence: input.analysis.suggestedConfidence,
-      updatedAt: new Date().toISOString().replace("T", " ").slice(0, 19),
+      updatedAt: new Date().toISOString(),
     })
     .where(eq(uncertainties.id, input.uncertainty_id));
 
@@ -470,7 +470,7 @@ export async function reviewBeliefUpdate(input: {
       beliefUpdate: nextBelief,
       remainingUnknowns: nextUnknowns,
       suggestedConfidence: nextConfidence,
-      updatedAt: new Date().toISOString().replace("T", " ").slice(0, 19),
+      updatedAt: new Date().toISOString(),
     })
     .where(eq(beliefUpdates.id, input.belief_update_id))
     .returning();
@@ -480,7 +480,7 @@ export async function reviewBeliefUpdate(input: {
       .update(uncertainties)
       .set({
         currentConfidence: nextConfidence,
-        updatedAt: new Date().toISOString().replace("T", " ").slice(0, 19),
+        updatedAt: new Date().toISOString(),
       })
       .where(eq(uncertainties.id, row.uncertaintyId));
   }
@@ -491,7 +491,7 @@ export async function reviewBeliefUpdate(input: {
       .update(uncertainties)
       .set({
         currentConfidence: row.priorConfidence,
-        updatedAt: new Date().toISOString().replace("T", " ").slice(0, 19),
+        updatedAt: new Date().toISOString(),
       })
       .where(eq(uncertainties.id, row.uncertaintyId));
   }
@@ -509,7 +509,7 @@ export async function reviewBeliefUpdate(input: {
     .update(evidence)
     .set({
       userStatus: evidenceStatus,
-      updatedAt: new Date().toISOString().replace("T", " ").slice(0, 19),
+      updatedAt: new Date().toISOString(),
     })
     .where(eq(evidence.id, row.evidenceId));
 

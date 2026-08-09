@@ -4,31 +4,25 @@ Build Judgment. Not Just Decisions.
 
 ## What works now
 
-- Local DB (libsql) + Project / Uncertainty / Milestone / Evidence chassis
-- **AI vertical slice:** raw goal → Decision Engine proposal → human edit/confirm → persist
+- **Supabase Postgres** for durable data
+- AI goal proposal + evidence belief updates
 - Screens: `/projects`, `/projects/:id`, `/milestones/:id`
 
-## Architecture
-
-```
-UI → Decision Engine → LLM Provider (replaceable) → Model
-UI → DB queries → libsql / later Postgres
-```
-
-Never call the LLM from UI components. Provider is configured via env.
-
 ## Setup
+
+1. Create a Supabase project and apply `db/schema.sql` (see [../SUPABASE.md](../SUPABASE.md))
+2. Local:
 
 ```bash
 npm install
 cp .env.example .env.local
-# set AI_BUILDER_TOKEN or LLM_API_KEY
-npm run db:seed   # optional demo data
+# set DATABASE_URL + AI_BUILDER_TOKEN
+npm run db:migrate   # or paste schema.sql in Supabase SQL Editor
 npm run dev
 ```
 
-Open http://localhost:3000/projects — use **Create Project with AI**.
+Open http://localhost:3000/projects
 
 ## Deploy
 
-See [../DEPLOY.md](../DEPLOY.md) for AI Builders (`*.ai-builders.space`).
+See [../DEPLOY.md](../DEPLOY.md) and [../SUPABASE.md](../SUPABASE.md).

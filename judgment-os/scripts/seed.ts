@@ -5,7 +5,7 @@
  * Run: npm run db:seed
  */
 import { eq } from "drizzle-orm";
-import { ensureSchema, getDb } from "../src/lib/db/client";
+import { getReadyDb } from "../src/lib/db/client";
 import {
   decisions,
   evidence,
@@ -27,8 +27,7 @@ const D1_ID = "55555555-5555-5555-5555-555555555551";
 const F1_ID = "66666666-6666-6666-6666-666666666661";
 
 async function seed() {
-  await ensureSchema();
-  const db = getDb();
+  const db = await getReadyDb();
 
   // Clear related rows for idempotent re-seed of this project only.
   await db.delete(feedback).where(eq(feedback.milestoneId, M1_ID));

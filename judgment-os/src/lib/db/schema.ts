@@ -2,81 +2,84 @@ import { randomUUID } from "crypto";
 import { relations, sql } from "drizzle-orm";
 import {
   integer,
-  sqliteTable,
+  jsonb,
+  pgTable,
   text,
-} from "drizzle-orm/sqlite-core";
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 /**
- * Local chassis schema (SQLite / libsql).
- * Canonical Postgres shape lives in db/schema.sql — keep fields aligned.
+ * Postgres / Supabase schema (aligned with db/schema.sql).
+ * Status fields stored as text for simpler inserts; DB may use enums.
  */
 
-export const projects = sqliteTable("projects", {
-  id: text("id")
+const timestamps = {
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+    .notNull()
+    .defaultNow(),
+};
+
+export const projects = pgTable("projects", {
+  id: uuid("id")
     .primaryKey()
     .$defaultFn(() => randomUUID()),
   title: text("title").notNull(),
   goal: text("goal").notNull().default(""),
   successCriteria: text("success_criteria").notNull().default(""),
   constraints: text("constraints").notNull().default(""),
-  userDeadline: text("user_deadline"),
-  recommendedDeadline: text("recommended_deadline"),
+  userDeadline: timestamp("user_deadline", {
+    withTimezone: true,
+    mode: "string",
+  }),
+  recommendedDeadline: timestamp("recommended_deadline", {
+    withTimezone: true,
+    mode: "string",
+  }),
   status: text("status").notNull().default("ACTIVE"),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
+  ...timestamps,
 });
 
-export const uncertainties = sqliteTable("uncertainties", {
-  id: text("id")
+export const uncertainties = pgTable("uncertainties", {
+  id: uuid("id")
     .primaryKey()
     .$defaultFn(() => randomUUID()),
-  projectId: text("project_id")
+  projectId: uuid("project_id")
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
   question: text("question").notNull(),
   importance: integer("importance").notNull().default(0),
   currentConfidence: integer("current_confidence").notNull().default(0),
   status: text("status").notNull().default("OPEN"),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
+  ...timestamps,
 });
 
-export const milestones = sqliteTable("milestones", {
-  id: text("id")
+export const milestones = pgTable("milestones", {
+  id: uuid("id")
     .primaryKey()
     .$defaultFn(() => randomUUID()),
-  projectId: text("project_id")
+  projectId: uuid("project_id")
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
-  uncertaintyId: text("uncertainty_id").references(() => uncertainties.id, {
+  uncertaintyId: uuid("uncertainty_id").references(() => uncertainties.id, {
     onDelete: "set null",
   }),
   title: text("title").notNull(),
   purpose: text("purpose").notNull().default(""),
   expectedLearning: text("expected_learning").notNull().default(""),
   status: text("status").notNull().default("PROPOSED"),
-  deadline: text("deadline"),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
+  deadline: timestamp("deadline", { withTimezone: true, mode: "string" }),
+  ...timestamps,
 });
 
-export const evidence = sqliteTable("evidence", {
-  id: text("id")
+export const evidence = pgTable("evidence", {
+  id: uuid("id")
     .primaryKey()
     .$defaultFn(() => randomUUID()),
-  milestoneId: text("milestone_id")
+  milestoneId: uuid("milestone_id")
     .notNull()
     .references(() => milestones.id, { onDelete: "cascade" }),
   claim: text("claim").notNull(),
@@ -84,39 +87,30 @@ export const evidence = sqliteTable("evidence", {
   source: text("source"),
   confidence: integer("confidence").notNull().default(0),
   userStatus: text("user_status").notNull().default("UNREVIEWED"),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
+  ...timestamps,
 });
 
-/**
- * AI belief update for one evidence item, cumulative on an uncertainty.
- * AI proposes; human can accept / challenge / correct.
- */
-export const beliefUpdates = sqliteTable("belief_updates", {
-  id: text("id")
+export const beliefUpdates = pgTable("belief_updates", {
+  id: uuid("id")
     .primaryKey()
     .$defaultFn(() => randomUUID()),
-  evidenceId: text("evidence_id")
+  evidenceId: uuid("evidence_id")
     .notNull()
     .references(() => evidence.id, { onDelete: "cascade" }),
-  uncertaintyId: text("uncertainty_id")
+  uncertaintyId: uuid("uncertainty_id")
     .notNull()
     .references(() => uncertainties.id, { onDelete: "cascade" }),
-  milestoneId: text("milestone_id")
+  milestoneId: uuid("milestone_id")
     .notNull()
     .references(() => milestones.id, { onDelete: "cascade" }),
   evidenceType: text("evidence_type").notNull(),
   evidenceStrength: integer("evidence_strength").notNull().default(0),
   supportsOrChallenges: text("supports_or_challenges").notNull(),
   beliefUpdate: text("belief_update").notNull().default(""),
-  remainingUnknowns: text("remaining_unknowns", { mode: "json" })
+  remainingUnknowns: jsonb("remaining_unknowns")
     .$type<string[]>()
     .notNull()
-    .default([]),
+    .default(sql`'[]'::jsonb`),
   recommendedNextExperiment: text("recommended_next_experiment")
     .notNull()
     .default(""),
@@ -124,30 +118,25 @@ export const beliefUpdates = sqliteTable("belief_updates", {
   suggestedConfidence: integer("suggested_confidence").notNull().default(0),
   userReviewStatus: text("user_review_status").notNull().default("UNREVIEWED"),
   userCorrection: text("user_correction"),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
+  ...timestamps,
 });
 
-export const decisions = sqliteTable("decisions", {
-  id: text("id")
+export const decisions = pgTable("decisions", {
+  id: uuid("id")
     .primaryKey()
     .$defaultFn(() => randomUUID()),
-  projectId: text("project_id")
+  projectId: uuid("project_id")
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
-  milestoneId: text("milestone_id")
+  milestoneId: uuid("milestone_id")
     .notNull()
     .references(() => milestones.id, { onDelete: "cascade" }),
   question: text("question").notNull(),
-  options: text("options", { mode: "json" })
+  options: jsonb("options")
     .$type<{ id: string; label: string; description?: string }[]>()
     .notNull()
-    .default([]),
-  selectedOption: text("selected_option", { mode: "json" }).$type<{
+    .default(sql`'[]'::jsonb`),
+  selectedOption: jsonb("selected_option").$type<{
     id: string;
     label: string;
     description?: string;
@@ -155,32 +144,30 @@ export const decisions = sqliteTable("decisions", {
   reasoning: text("reasoning").notNull().default(""),
   confidence: integer("confidence").notNull().default(0),
   status: text("status").notNull().default("OPEN"),
-  evidenceAtTime: text("evidence_at_time", { mode: "json" })
+  evidenceAtTime: jsonb("evidence_at_time")
     .$type<unknown[]>()
     .notNull()
-    .default([]),
-  unknownsAtTime: text("unknowns_at_time", { mode: "json" })
+    .default(sql`'[]'::jsonb`),
+  unknownsAtTime: jsonb("unknowns_at_time")
     .$type<unknown[]>()
     .notNull()
-    .default([]),
+    .default(sql`'[]'::jsonb`),
   confidenceAtTime: integer("confidence_at_time"),
-  deadlineAtTime: text("deadline_at_time"),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
+  deadlineAtTime: timestamp("deadline_at_time", {
+    withTimezone: true,
+    mode: "string",
+  }),
+  ...timestamps,
 });
 
-export const feedback = sqliteTable("feedback", {
-  id: text("id")
+export const feedback = pgTable("feedback", {
+  id: uuid("id")
     .primaryKey()
     .$defaultFn(() => randomUUID()),
-  milestoneId: text("milestone_id")
+  milestoneId: uuid("milestone_id")
     .notNull()
     .references(() => milestones.id, { onDelete: "cascade" }),
-  decisionId: text("decision_id").references(() => decisions.id, {
+  decisionId: uuid("decision_id").references(() => decisions.id, {
     onDelete: "set null",
   }),
   expectedOutcome: text("expected_outcome").notNull().default(""),
@@ -188,9 +175,9 @@ export const feedback = sqliteTable("feedback", {
   learning: text("learning").notNull().default(""),
   confidenceBefore: integer("confidence_before"),
   confidenceAfter: integer("confidence_after"),
-  createdAt: text("created_at")
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .defaultNow(),
 });
 
 export const projectsRelations = relations(projects, ({ many }) => ({

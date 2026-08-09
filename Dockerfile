@@ -1,5 +1,5 @@
 # JudgmentOS on AI Builders / Koyeb
-# Repo root Dockerfile (required by AI Builders). Builds judgment-os/ Next.js app.
+# Requires DATABASE_URL (Supabase Postgres) at runtime.
 
 FROM node:20-alpine AS deps
 WORKDIR /app
@@ -11,6 +11,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY judgment-os/ ./
 ENV NEXT_TELEMETRY_DISABLED=1
+# Build-time placeholder so Next can compile; runtime uses real DATABASE_URL
+ENV DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build
 RUN npm run build
 
 FROM node:20-alpine AS runner
@@ -19,17 +21,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
-# Ephemeral local DB for MVP demo (data resets on redeploy / new instance)
-ENV DATABASE_URL=file:/app/data/judgment.db
 ENV LLM_PROVIDER=openai-compatible
 ENV LLM_BASE_URL=https://space.ai-builders.com/backend/v1
 ENV LLM_MODEL=grok-4-fast
-# AI_BUILDER_TOKEN is injected by the platform at runtime — do not bake secrets in.
+# AI_BUILDER_TOKEN injected by platform.
+# DATABASE_URL must be provided at deploy time (Supabase connection string).
 
 RUN addgroup --system --gid 1001 nodejs \
-  && adduser --system --uid 1001 nextjs \
-  && mkdir -p /app/data \
-  && chown nextjs:nodejs /app/data
+  && adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -37,8 +36,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
 
-# Platform sets PORT (default 8000 on AI Builders / Koyeb)
 EXPOSE 8000
 
-# Must use shell form so ${PORT} expands
+# Koyeb sets PORT; Next standalone reads it. Default 8000 for local docker runs.
 CMD sh -c "node server.js"
