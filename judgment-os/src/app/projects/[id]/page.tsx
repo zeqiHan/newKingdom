@@ -4,7 +4,13 @@ import { getProjectDetail } from "@/lib/db/queries";
 import {
   createMilestoneAction,
   createUncertaintyAction,
+  updateProjectDeadlineAction,
 } from "./actions";
+
+function toDateInputValue(value: string | null): string {
+  if (!value) return "";
+  return value.slice(0, 10);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -64,20 +70,50 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         </p>
       </div>
 
-      <section className="space-y-2">
+      <section className="space-y-3">
         <h2 className="text-sm font-medium tracking-wide text-black/50 dark:text-white/50">
           截止日期
         </h2>
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <p className="text-black/40 dark:text-white/40">用户</p>
-            <p>{project.user_deadline ?? "—"}</p>
+            <p>{project.user_deadline ? toDateInputValue(project.user_deadline) : "—"}</p>
           </div>
           <div>
             <p className="text-black/40 dark:text-white/40">系统建议</p>
-            <p>{project.recommended_deadline ?? "—"}</p>
+            <p>
+              {project.recommended_deadline
+                ? toDateInputValue(project.recommended_deadline)
+                : "—"}
+            </p>
           </div>
         </div>
+        <form
+          action={updateProjectDeadlineAction}
+          className="flex flex-wrap items-end gap-2 border border-black/10 p-3 text-sm dark:border-white/10"
+        >
+          <input type="hidden" name="project_id" value={project.id} />
+          <label className="space-y-1">
+            <span className="block text-xs text-black/50 dark:text-white/50">
+              修改用户截止日期
+            </span>
+            <input
+              name="user_deadline"
+              type="date"
+              defaultValue={toDateInputValue(project.user_deadline)}
+              className="border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+            />
+          </label>
+          <button
+            type="submit"
+            className="border border-black/30 px-3 py-1 dark:border-white/30"
+          >
+            保存
+          </button>
+          <p className="w-full text-xs text-black/40 dark:text-white/40">
+            清空日期后保存即可移除截止日期。
+          </p>
+        </form>
       </section>
 
       <section className="space-y-3">
@@ -176,6 +212,9 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                 </Link>
                 <p className="mt-1 text-xs text-black/50 dark:text-white/50">
                   状态：{MILESTONE_STATUS[m.status] ?? m.status}
+                  {m.deadline
+                    ? ` · 截止 ${toDateInputValue(m.deadline)}`
+                    : " · 截止 —"}
                 </p>
                 <p className="mt-2 text-xs">
                   预期学习：{m.expected_learning || "—"}

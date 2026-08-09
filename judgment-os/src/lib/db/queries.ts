@@ -645,6 +645,46 @@ export async function updateMilestoneStatus(
   return rows[0] ? mapMilestone(rows[0]) : null;
 }
 
+/** Normalize date input (YYYY-MM-DD) or clear to null. */
+function normalizeDeadlineInput(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? "";
+  return trimmed || null;
+}
+
+export async function updateProjectUserDeadline(
+  projectId: string,
+  userDeadline: string | null,
+): Promise<Project> {
+  const db = await getReadyDb();
+  const rows = await db
+    .update(projects)
+    .set({
+      userDeadline: normalizeDeadlineInput(userDeadline),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(projects.id, projectId))
+    .returning();
+  if (!rows[0]) throw new Error("未找到项目。");
+  return mapProject(rows[0]);
+}
+
+export async function updateMilestoneDeadline(
+  milestoneId: string,
+  deadline: string | null,
+): Promise<Milestone> {
+  const db = await getReadyDb();
+  const rows = await db
+    .update(milestones)
+    .set({
+      deadline: normalizeDeadlineInput(deadline),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(milestones.id, milestoneId))
+    .returning();
+  if (!rows[0]) throw new Error("未找到里程碑。");
+  return mapMilestone(rows[0]);
+}
+
 /**
  * Persist Decision Gate evaluation as OPEN (AI recommends; human has not chosen).
  * Updates an existing OPEN/REOPENED row on this milestone; otherwise inserts.

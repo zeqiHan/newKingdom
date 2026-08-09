@@ -1,7 +1,19 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createMilestone, createUncertainty } from "@/lib/db/queries";
+import {
+  createMilestone,
+  createUncertainty,
+  updateProjectUserDeadline,
+} from "@/lib/db/queries";
+
+export async function updateProjectDeadlineAction(formData: FormData) {
+  const project_id = String(formData.get("project_id") ?? "");
+  const user_deadline = String(formData.get("user_deadline") ?? "");
+
+  await updateProjectUserDeadline(project_id, user_deadline || null);
+  redirect(`/projects/${project_id}`);
+}
 
 export async function createUncertaintyAction(formData: FormData) {
   const project_id = String(formData.get("project_id") ?? "");

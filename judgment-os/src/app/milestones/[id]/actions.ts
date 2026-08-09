@@ -10,8 +10,17 @@ import {
   listBeliefUpdatesForUncertainty,
   reviewBeliefUpdate,
   saveBeliefUpdate,
+  updateMilestoneDeadline,
 } from "@/lib/db/queries";
 import type { BeliefUpdateReviewStatus, Evidence } from "@/lib/db/types";
+
+export async function updateMilestoneDeadlineAction(formData: FormData) {
+  const milestone_id = String(formData.get("milestone_id") ?? "");
+  const deadline = String(formData.get("deadline") ?? "");
+
+  await updateMilestoneDeadline(milestone_id, deadline || null);
+  redirect(`/milestones/${milestone_id}`);
+}
 
 export async function createEvidenceAction(formData: FormData) {
   const milestone_id = String(formData.get("milestone_id") ?? "");

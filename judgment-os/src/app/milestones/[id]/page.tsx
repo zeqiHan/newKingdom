@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMilestoneWorkspace } from "@/lib/db/queries";
 import type { BeliefUpdate, Decision } from "@/lib/db/types";
-import { createEvidenceAction, reviewBeliefUpdateAction } from "./actions";
+import { createEvidenceAction, reviewBeliefUpdateAction, updateMilestoneDeadlineAction } from "./actions";
 import {
   confirmDecisionChoiceAction,
   reopenDecisionAction,
@@ -59,6 +59,11 @@ const GATE_LABEL: Record<string, string> = {
   MAKE_PROVISIONAL_DECISION: "可做临时决定",
   READY_TO_FREEZE: "可冻结决定",
 };
+
+function toDateInputValue(value: string | null): string {
+  if (!value) return "";
+  return value.slice(0, 10);
+}
 
 function BeliefUpdateBlock({
   update,
@@ -467,8 +472,36 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
         </p>
         <p className="mt-2 text-xs text-black/40 dark:text-white/40">
           状态：{MILESTONE_STATUS[milestone.status] ?? milestone.status}
-          {milestone.deadline ? ` · 截止日期 ${milestone.deadline}` : ""}
+          {milestone.deadline
+            ? ` · 截止日期 ${toDateInputValue(milestone.deadline)}`
+            : " · 截止日期 —"}
         </p>
+        <form
+          action={updateMilestoneDeadlineAction}
+          className="mt-3 flex flex-wrap items-end gap-2 border border-black/10 p-3 text-sm dark:border-white/10"
+        >
+          <input type="hidden" name="milestone_id" value={milestone.id} />
+          <label className="space-y-1">
+            <span className="block text-xs text-black/50 dark:text-white/50">
+              修改截止日期
+            </span>
+            <input
+              name="deadline"
+              type="date"
+              defaultValue={toDateInputValue(milestone.deadline)}
+              className="border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+            />
+          </label>
+          <button
+            type="submit"
+            className="border border-black/30 px-3 py-1 dark:border-white/30"
+          >
+            保存
+          </button>
+          <p className="w-full text-xs text-black/40 dark:text-white/40">
+            清空日期后保存即可移除截止日期。
+          </p>
+        </form>
       </div>
 
       <section className="space-y-2">
