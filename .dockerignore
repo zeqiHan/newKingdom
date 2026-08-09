@@ -1,0 +1,15 @@
+.git
+.gitignore
+**/.next
+**/node_modules
+**/data
+**/.env
+**/.env.local
+**/.env*.local
+**/coverage
+**/*.md
+!judgment-os/README.md
+docs
+agent-transcripts
+.cursor
+**/tsconfig.tsbuildinfo

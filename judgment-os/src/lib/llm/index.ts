@@ -20,7 +20,7 @@ export function getLlmProvider(): LlmProvider {
 
   if (!apiKey) {
     throw new Error(
-      "未配置模型密钥。请在 .env.local 中设置 LLM_API_KEY 或 AI_BUILDER_TOKEN。",
+      "未配置模型密钥。请设置 LLM_API_KEY 或 AI_BUILDER_TOKEN（本地用 .env.local；AI Builders 部署时会自动注入 AI_BUILDER_TOKEN）。",
     );
   }
 

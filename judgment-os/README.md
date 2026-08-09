@@ -28,3 +28,7 @@ npm run dev
 ```
 
 Open http://localhost:3000/projects — use **Create Project with AI**.
+
+## Deploy
+
+See [../DEPLOY.md](../DEPLOY.md) for AI Builders (`*.ai-builders.space`).
