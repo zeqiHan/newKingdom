@@ -2,12 +2,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMilestoneWorkspace } from "@/lib/db/queries";
 import type { BeliefUpdate, Decision } from "@/lib/db/types";
-import { createEvidenceAction, reviewBeliefUpdateAction, updateMilestoneDeadlineAction } from "./actions";
+import {
+  createEvidenceAction,
+  reviewBeliefUpdateAction,
+  updateMilestoneDeadlineAction,
+} from "./actions";
 import {
   confirmDecisionChoiceAction,
   reopenDecisionAction,
 } from "./decision-actions";
 import { DecisionGatePanel } from "./decision-gate-panel";
+import {
+  captureFeedbackAction,
+  createExperimentAction,
+} from "./reality-actions";
+import { runWebResearchAction } from "./research-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -281,6 +290,57 @@ function DecisionGateResult({
                     </ul>
                   </div>
                 ) : null}
+                {opt.contradictingEvidence &&
+                opt.contradictingEvidence.length > 0 ? (
+                  <div className="mt-2 text-xs">
+                    <p className="font-medium">反对/削弱证据：</p>
+                    <ul className="list-disc pl-4">
+                      {opt.contradictingEvidence.map((ev, i) => (
+                        <li key={i}>{ev}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {opt.assumptions && opt.assumptions.length > 0 ? (
+                  <div className="mt-2 text-xs">
+                    <p className="font-medium">假设：</p>
+                    <ul className="list-disc pl-4">
+                      {opt.assumptions.map((a, i) => (
+                        <li key={i}>{a}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {opt.benefits && opt.benefits.length > 0 ? (
+                  <div className="mt-2 text-xs">
+                    <p className="font-medium">收益：</p>
+                    <ul className="list-disc pl-4">
+                      {opt.benefits.map((b, i) => (
+                        <li key={i}>{b}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {opt.downsides && opt.downsides.length > 0 ? (
+                  <div className="mt-2 text-xs">
+                    <p className="font-medium">代价：</p>
+                    <ul className="list-disc pl-4">
+                      {opt.downsides.map((d, i) => (
+                        <li key={i}>{d}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {opt.importantUnknowns && opt.importantUnknowns.length > 0 ? (
+                  <div className="mt-2 text-xs">
+                    <p className="font-medium">对该选项仍未知：</p>
+                    <ul className="list-disc pl-4">
+                      {opt.importantUnknowns.map((u, i) => (
+                        <li key={i}>{u}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </li>
             );
           })}
@@ -439,12 +499,17 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
     evidence,
     beliefUpdatesByEvidenceId,
     decisions,
+    experiments,
     feedback,
   } = workspace;
   const decision = decisions[0] ?? null;
+  const experiment = experiments[0] ?? null;
   const lockedByActiveDecision = decisions.some(
     (d) => d.status === "PROVISIONAL" || d.status === "FROZEN",
   );
+  const canStartExperiment =
+    decision &&
+    (decision.status === "PROVISIONAL" || decision.status === "FROZEN");
 
   const latestBelief = Object.values(beliefUpdatesByEvidenceId).sort((a, b) =>
     a.created_at < b.created_at ? 1 : -1,
@@ -635,6 +700,35 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
             保存证据并分析信念
           </button>
         </form>
+
+        {uncertainty ? (
+          <form
+            action={runWebResearchAction}
+            className="space-y-2 border border-dashed border-black/20 p-3 text-sm dark:border-white/20"
+          >
+            <p className="font-medium">AI 网络调研（服务本不确定性）</p>
+            <p className="text-xs text-black/50 dark:text-white/50">
+              搜索 → 提取声称 → 分类/强度 → 信念更新。来源所说 ≠ 事实为真；每条保留来源，你可质疑/修正。
+            </p>
+            <input type="hidden" name="milestone_id" value={milestone.id} />
+            <label className="block space-y-1">
+              研究问题
+              <textarea
+                name="research_question"
+                required
+                rows={2}
+                className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+                placeholder="例如：知识工作者是否会为决策工具付费？有哪些公开信号？"
+              />
+            </label>
+            <button
+              type="submit"
+              className="border border-black/30 px-3 py-1 dark:border-white/30"
+            >
+              运行有限调研（最多 3 条声称）
+            </button>
+          </form>
+        ) : null}
       </section>
 
       <section className="space-y-2">
@@ -679,18 +773,121 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
         )}
       </section>
 
-      <section className="space-y-2">
+      <section className="space-y-3">
         <h2 className="text-sm font-medium tracking-wide text-black/50 dark:text-white/50">
-          权衡 / 下一步实验
+          行动 / 实验
         </h2>
-        {latestBelief?.recommended_next_experiment ? (
-          <p className="text-sm">
-            <span className="font-medium">基于最新证据的建议实验：</span>
-            {latestBelief.recommended_next_experiment}
+        <p className="text-xs text-black/50 dark:text-white/50">
+          决策之后，用可检验的现实互动产生信息——不是「完成项目」。
+        </p>
+        {experiment ? (
+          <div className="space-y-2 border border-black/10 p-3 text-sm dark:border-white/10">
+            <p>
+              <span className="font-medium">行动：</span>
+              {experiment.action_text}
+            </p>
+            <p>
+              <span className="font-medium">假设：</span>
+              {experiment.hypothesis || "—"}
+            </p>
+            <p>
+              <span className="font-medium">预期结果：</span>
+              {experiment.expected_outcome || "—"}
+            </p>
+            <p>
+              <span className="font-medium">期望证据：</span>
+              {experiment.evidence_expected || "—"}
+            </p>
+            <p className="text-xs text-black/40 dark:text-white/40">
+              状态：{experiment.status}
+              {experiment.deadline
+                ? ` · 截止 ${toDateInputValue(experiment.deadline)}`
+                : ""}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-black/50 dark:text-white/50">
+            暂无实验。
           </p>
-        ) : null}
+        )}
+        {canStartExperiment ? (
+          <form
+            action={createExperimentAction}
+            className="space-y-2 border border-black/10 p-3 text-sm dark:border-white/10"
+          >
+            <p className="font-medium">记录实验 / 行动</p>
+            <input type="hidden" name="milestone_id" value={milestone.id} />
+            <input
+              type="hidden"
+              name="decision_id"
+              value={decision?.id ?? ""}
+            />
+            <label className="block space-y-1">
+              行动描述
+              <textarea
+                name="action_text"
+                required
+                rows={2}
+                className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+                placeholder="例如：向 10 位潜在用户报价 ¥199/年"
+              />
+            </label>
+            <label className="block space-y-1">
+              假设
+              <textarea
+                name="hypothesis"
+                rows={2}
+                className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+              />
+            </label>
+            <label className="block space-y-1">
+              预期结果
+              <textarea
+                name="expected_outcome"
+                rows={2}
+                className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+                placeholder="例如：至少 2 人真实付款"
+              />
+            </label>
+            <label className="block space-y-1">
+              期望收集的证据
+              <textarea
+                name="evidence_expected"
+                rows={2}
+                className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+              />
+            </label>
+            <label className="block space-y-1">
+              截止日期（可选）
+              <input
+                name="deadline"
+                type="date"
+                className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+              />
+            </label>
+            <button
+              type="submit"
+              className="border border-black/30 px-3 py-1 dark:border-white/30"
+            >
+              开始实验
+            </button>
+          </form>
+        ) : (
+          <p className="text-xs text-black/50 dark:text-white/50">
+            先做出临时或冻结决策后，才能登记实验。
+          </p>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium tracking-wide text-black/50 dark:text-white/50">
+          现实反馈 / 学习
+        </h2>
+        <p className="text-xs text-black/50 dark:text-white/50">
+          现实 &gt; 推理。反馈可支持、削弱或推翻先前决策。
+        </p>
         {feedback[0] ? (
-          <div className="space-y-2 text-sm">
+          <div className="space-y-2 border border-black/10 p-3 text-sm dark:border-white/10">
             <p>
               <span className="font-medium">预期：</span>
               {feedback[0].expected_outcome}
@@ -700,17 +897,108 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
               {feedback[0].actual_outcome}
             </p>
             <p>
+              <span className="font-medium">差异：</span>
+              {feedback[0].difference || "—"}
+            </p>
+            <p>
               <span className="font-medium">学习：</span>
               {feedback[0].learning}
             </p>
+            {feedback[0].ai_analysis ? (
+              <p className="text-xs">
+                <span className="font-medium">AI 分析：</span>
+                {feedback[0].ai_analysis}
+              </p>
+            ) : null}
             <p className="text-xs text-black/40 dark:text-white/40">
-              信心 {feedback[0].confidence_before ?? "—"} →{" "}
+              对决策影响：{feedback[0].decision_impact}
+              {feedback[0].suggest_reopen ? " · AI 建议重开决策" : ""}
+              {" · 信心 "}
+              {feedback[0].confidence_before ?? "—"} →{" "}
               {feedback[0].confidence_after ?? "—"}
             </p>
+            {feedback[0].assumptions_weakened.length > 0 ? (
+              <div className="text-xs">
+                <p className="font-medium">被削弱的假设：</p>
+                <ul className="list-disc pl-4">
+                  {feedback[0].assumptions_weakened.map((a, i) => (
+                    <li key={i}>{a}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {feedback[0].new_uncertainties.length > 0 ? (
+              <div className="text-xs">
+                <p className="font-medium">新不确定性：</p>
+                <ul className="list-disc pl-4">
+                  {feedback[0].new_uncertainties.map((u, i) => (
+                    <li key={i}>{u}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
-        ) : !latestBelief ? (
-          <p className="text-sm">
-            下一步：执行行动，再记录反馈。尚无反馈。
+        ) : null}
+
+        {experiment && experiment.status !== "COMPLETED" ? (
+          <form
+            action={captureFeedbackAction}
+            className="space-y-2 border border-black/10 p-3 text-sm dark:border-white/10"
+          >
+            <p className="font-medium">记录现实反馈</p>
+            <input type="hidden" name="milestone_id" value={milestone.id} />
+            <input
+              type="hidden"
+              name="experiment_id"
+              value={experiment.id}
+            />
+            <input
+              type="hidden"
+              name="decision_id"
+              value={decision?.id ?? ""}
+            />
+            <label className="block space-y-1">
+              预期（可改）
+              <textarea
+                name="expected_outcome"
+                rows={2}
+                defaultValue={experiment.expected_outcome}
+                className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+              />
+            </label>
+            <label className="block space-y-1">
+              实际结果
+              <textarea
+                name="actual_outcome"
+                required
+                rows={3}
+                className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+              />
+            </label>
+            <label className="block space-y-1">
+              你的学习（可选；可覆盖 AI）
+              <textarea
+                name="user_learning"
+                rows={2}
+                className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-xs">
+              <input type="checkbox" name="reopen_decision" value="1" />
+              同时重开相关决策（保留历史）
+            </label>
+            <button
+              type="submit"
+              className="border border-black/30 px-3 py-1 dark:border-white/30"
+            >
+              保存反馈并标记学习已捕获
+            </button>
+          </form>
+        ) : !feedback[0] ? (
+          <p className="text-sm text-black/50 dark:text-white/50">
+            {latestBelief?.recommended_next_experiment
+              ? `建议实验：${latestBelief.recommended_next_experiment}`
+              : "先登记实验，再回来记录现实结果。"}
           </p>
         ) : null}
       </section>

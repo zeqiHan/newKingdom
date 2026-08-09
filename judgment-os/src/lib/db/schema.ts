@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { relations, sql } from "drizzle-orm";
 import {
+  boolean,
   integer,
   jsonb,
   pgTable,
@@ -196,6 +197,25 @@ export const decisions = pgTable("decisions", {
   ...timestamps,
 });
 
+export const experiments = pgTable("experiments", {
+  id: uuid("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  milestoneId: uuid("milestone_id")
+    .notNull()
+    .references(() => milestones.id, { onDelete: "cascade" }),
+  decisionId: uuid("decision_id").references(() => decisions.id, {
+    onDelete: "set null",
+  }),
+  actionText: text("action_text").notNull().default(""),
+  hypothesis: text("hypothesis").notNull().default(""),
+  expectedOutcome: text("expected_outcome").notNull().default(""),
+  evidenceExpected: text("evidence_expected").notNull().default(""),
+  deadline: timestamp("deadline", { withTimezone: true, mode: "string" }),
+  status: text("status").notNull().default("PLANNED"),
+  ...timestamps,
+});
+
 export const feedback = pgTable("feedback", {
   id: uuid("id")
     .primaryKey()
@@ -206,20 +226,103 @@ export const feedback = pgTable("feedback", {
   decisionId: uuid("decision_id").references(() => decisions.id, {
     onDelete: "set null",
   }),
+  experimentId: uuid("experiment_id").references(() => experiments.id, {
+    onDelete: "set null",
+  }),
   expectedOutcome: text("expected_outcome").notNull().default(""),
   actualOutcome: text("actual_outcome").notNull().default(""),
+  difference: text("difference").notNull().default(""),
   learning: text("learning").notNull().default(""),
   confidenceBefore: integer("confidence_before"),
   confidenceAfter: integer("confidence_after"),
+  assumptionsStrengthened: jsonb("assumptions_strengthened")
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  assumptionsWeakened: jsonb("assumptions_weakened")
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  uncertaintiesReduced: jsonb("uncertainties_reduced")
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  newUncertainties: jsonb("new_uncertainties")
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  decisionImpact: text("decision_impact").notNull().default("NEUTRAL"),
+  suggestReopen: boolean("suggest_reopen").notNull().default(false),
+  aiAnalysis: text("ai_analysis").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .notNull()
     .defaultNow(),
+});
+
+export const judgmentEvents = pgTable("judgment_events", {
+  id: uuid("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  milestoneId: uuid("milestone_id").references(() => milestones.id, {
+    onDelete: "set null",
+  }),
+  decisionId: uuid("decision_id").references(() => decisions.id, {
+    onDelete: "set null",
+  }),
+  uncertaintyId: uuid("uncertainty_id").references(() => uncertainties.id, {
+    onDelete: "set null",
+  }),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload")
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .notNull()
+    .defaultNow(),
+});
+
+export const planProposals = pgTable("plan_proposals", {
+  id: uuid("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  milestoneId: uuid("milestone_id").references(() => milestones.id, {
+    onDelete: "set null",
+  }),
+  triggerKind: text("trigger_kind").notNull().default("MANUAL"),
+  whatChanged: text("what_changed").notNull().default(""),
+  whyNotOptimal: text("why_not_optimal").notNull().default(""),
+  proposedChanges: jsonb("proposed_changes")
+    .$type<
+      {
+        type: string;
+        targetId: string | null;
+        title: string;
+        detail: string;
+      }[]
+    >()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  expectedBenefit: text("expected_benefit").notNull().default(""),
+  tradeoffRisk: text("tradeoff_risk").notNull().default(""),
+  newUnknown: text("new_unknown").notNull().default(""),
+  status: text("status").notNull().default("PENDING"),
+  userNote: text("user_note"),
+  ...timestamps,
 });
 
 export const projectsRelations = relations(projects, ({ many }) => ({
   uncertainties: many(uncertainties),
   milestones: many(milestones),
   decisions: many(decisions),
+  judgmentEvents: many(judgmentEvents),
+  planProposals: many(planProposals),
 }));
 
 export const uncertaintiesRelations = relations(
@@ -247,6 +350,7 @@ export const milestonesRelations = relations(milestones, ({ one, many }) => ({
   decisions: many(decisions),
   feedback: many(feedback),
   beliefUpdates: many(beliefUpdates),
+  experiments: many(experiments),
 }));
 
 export const evidenceRelations = relations(evidence, ({ one }) => ({
@@ -285,6 +389,19 @@ export const decisionsRelations = relations(decisions, ({ one, many }) => ({
     references: [milestones.id],
   }),
   feedback: many(feedback),
+  experiments: many(experiments),
+}));
+
+export const experimentsRelations = relations(experiments, ({ one, many }) => ({
+  milestone: one(milestones, {
+    fields: [experiments.milestoneId],
+    references: [milestones.id],
+  }),
+  decision: one(decisions, {
+    fields: [experiments.decisionId],
+    references: [decisions.id],
+  }),
+  feedback: many(feedback),
 }));
 
 export const feedbackRelations = relations(feedback, ({ one }) => ({
@@ -295,5 +412,16 @@ export const feedbackRelations = relations(feedback, ({ one }) => ({
   decision: one(decisions, {
     fields: [feedback.decisionId],
     references: [decisions.id],
+  }),
+  experiment: one(experiments, {
+    fields: [feedback.experimentId],
+    references: [experiments.id],
+  }),
+}));
+
+export const judgmentEventsRelations = relations(judgmentEvents, ({ one }) => ({
+  project: one(projects, {
+    fields: [judgmentEvents.projectId],
+    references: [projects.id],
   }),
 }));

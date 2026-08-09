@@ -1,11 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProjectDetail } from "@/lib/db/queries";
+import {
+  getLatestDeadlineChangeEvent,
+  getProjectDetail,
+} from "@/lib/db/queries";
+import type { DeadlineChangeAnalysis } from "@/lib/decision-engine";
 import {
   createMilestoneAction,
   createUncertaintyAction,
   updateProjectDeadlineAction,
 } from "./actions";
+import {
+  proposeReplanAction,
+  reviewPlanProposalAction,
+} from "./replan-actions";
 
 function toDateInputValue(value: string | null): string {
   if (!value) return "";
@@ -16,6 +24,7 @@ export const dynamic = "force-dynamic";
 
 type ProjectPageProps = {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ deadline_updated?: string }>;
 };
 
 function importanceBar(importance: number): string {
@@ -41,12 +50,22 @@ const UNCERTAINTY_STATUS: Record<string, string> = {
   ARCHIVED: "已归档",
 };
 
-export default async function ProjectPage({ params }: ProjectPageProps) {
+export default async function ProjectPage({
+  params,
+  searchParams,
+}: ProjectPageProps) {
   const { id } = await params;
+  const sp = searchParams ? await searchParams : {};
   const detail = await getProjectDetail(id);
   if (!detail) notFound();
 
   const { project, uncertainties, milestones } = detail;
+  const planProposals = detail.planProposals;
+  const pendingProposals = planProposals.filter((p) => p.status === "PENDING");
+  const deadlineEvent = await getLatestDeadlineChangeEvent(id);
+  const deadlineAnalysis = deadlineEvent?.payload?.analysis as
+    | DeadlineChangeAnalysis
+    | undefined;
 
   return (
     <div className="space-y-10">
@@ -111,9 +130,62 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             保存
           </button>
           <p className="w-full text-xs text-black/40 dark:text-white/40">
-            清空日期后保存即可移除截止日期。
+            清空日期后保存即可移除截止日期。保存时系统会分析压缩/改期的利弊（不替你决定）。
           </p>
         </form>
+        {sp.deadline_updated === "1" || deadlineAnalysis ? (
+          <div className="space-y-2 border border-dashed border-black/20 p-3 text-xs dark:border-white/20">
+            <p className="font-medium text-sm">时间引擎分析</p>
+            {deadlineAnalysis ? (
+              <>
+                <p>{deadlineAnalysis.summary}</p>
+                {deadlineAnalysis.benefitsOfCompression.length > 0 ? (
+                  <div>
+                    <p className="font-medium">压缩收益：</p>
+                    <ul className="list-disc pl-4">
+                      {deadlineAnalysis.benefitsOfCompression.map((b, i) => (
+                        <li key={i}>{b}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {deadlineAnalysis.costs.length > 0 ? (
+                  <div>
+                    <p className="font-medium">代价：</p>
+                    <ul className="list-disc pl-4">
+                      {deadlineAnalysis.costs.map((c, i) => (
+                        <li key={i}>{c}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <p>
+                  <span className="font-medium">信息损失：</span>
+                  {deadlineAnalysis.expectedInformationLoss}
+                </p>
+                <p>
+                  <span className="font-medium">决策风险：</span>
+                  {deadlineAnalysis.decisionRisk}
+                </p>
+                {deadlineAnalysis.recommendedTimelineDisadvantages.length >
+                0 ? (
+                  <div>
+                    <p className="font-medium">更长建议时间线的劣势：</p>
+                    <ul className="list-disc pl-4">
+                      {deadlineAnalysis.recommendedTimelineDisadvantages.map(
+                        (d, i) => (
+                          <li key={i}>{d}</li>
+                        ),
+                      )}
+                    </ul>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p>已保存截止日期变更（分析暂不可用）。</p>
+            )}
+          </div>
+        ) : null}
       </section>
 
       <section className="space-y-3">
@@ -296,6 +368,133 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             创建里程碑
           </button>
         </form>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium tracking-wide text-black/50 dark:text-white/50">
+          动态重规划
+        </h2>
+        <p className="text-xs text-black/50 dark:text-white/50">
+          AI 可提案增删改里程碑/不确定性或重开决策；必须由你接受、修改说明或拒绝。不会静默改写计划。
+        </p>
+        <form
+          action={proposeReplanAction}
+          className="space-y-2 border border-black/10 p-3 text-sm dark:border-white/10"
+        >
+          <input type="hidden" name="project_id" value={project.id} />
+          <label className="block space-y-1">
+            触发说明
+            <input
+              name="trigger_note"
+              defaultValue="手动请求评估当前计划是否仍最优"
+              className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+            />
+          </label>
+          <button
+            type="submit"
+            className="border border-black/30 px-3 py-1 dark:border-white/30"
+          >
+            请求 AI 重规划提案
+          </button>
+        </form>
+
+        {pendingProposals.length === 0 ? (
+          <p className="text-sm text-black/50 dark:text-white/50">
+            暂无待审提案
+            {planProposals.length > 0
+              ? `（历史 ${planProposals.length} 条）`
+              : ""}
+            。
+          </p>
+        ) : (
+          <ul className="space-y-4">
+            {pendingProposals.map((p) => (
+              <li
+                key={p.id}
+                className="space-y-2 border border-black/10 p-3 text-sm dark:border-white/10"
+              >
+                <p className="text-xs text-black/40 dark:text-white/40">
+                  触发：{p.trigger_kind} · {p.created_at.slice(0, 19)}
+                </p>
+                <p>
+                  <span className="font-medium">发生了什么：</span>
+                  {p.what_changed}
+                </p>
+                <p>
+                  <span className="font-medium">为何可能不再最优：</span>
+                  {p.why_not_optimal}
+                </p>
+                <div>
+                  <p className="font-medium">提案改动：</p>
+                  {p.proposed_changes.length === 0 ? (
+                    <p className="text-xs">（无具体改动 — 可能建议维持原计划）</p>
+                  ) : (
+                    <ul className="mt-1 list-disc pl-5 text-xs">
+                      {p.proposed_changes.map((c, i) => (
+                        <li key={i}>
+                          [{c.type}] {c.title}
+                          {c.detail ? ` — ${c.detail}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <p className="text-xs">
+                  <span className="font-medium">预期收益：</span>
+                  {p.expected_benefit}
+                </p>
+                <p className="text-xs">
+                  <span className="font-medium">代价/风险：</span>
+                  {p.tradeoff_risk}
+                </p>
+                <p className="text-xs">
+                  <span className="font-medium">新未知：</span>
+                  {p.new_unknown}
+                </p>
+                <form
+                  action={reviewPlanProposalAction}
+                  className="space-y-2 border-t border-black/10 pt-2 dark:border-white/10"
+                >
+                  <input type="hidden" name="project_id" value={project.id} />
+                  <input type="hidden" name="proposal_id" value={p.id} />
+                  <label className="block space-y-1 text-xs">
+                    你的说明（拒绝/修改时建议填写）
+                    <input
+                      name="user_note"
+                      className="w-full border border-black/20 bg-transparent px-2 py-1 dark:border-white/20"
+                    />
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      name="decision"
+                      value="ACCEPT"
+                      className="border border-black/30 px-2 py-0.5 dark:border-white/30"
+                    >
+                      接受并应用
+                    </button>
+                    <button
+                      type="submit"
+                      name="decision"
+                      value="MODIFY"
+                      className="border border-black/30 px-2 py-0.5 dark:border-white/30"
+                    >
+                      带说明后应用
+                    </button>
+                    <button
+                      type="submit"
+                      name="decision"
+                      value="REJECT"
+                      className="border border-black/30 px-2 py-0.5 dark:border-white/30"
+                    >
+                      拒绝（保留历史）
+                    </button>
+                  </div>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

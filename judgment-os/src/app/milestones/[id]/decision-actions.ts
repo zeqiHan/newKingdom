@@ -7,6 +7,7 @@ import {
   getDecision,
   getEvidence,
   getMilestoneWorkspace,
+  recordJudgmentEvent,
   reopenDecision,
   saveDecisionFromGate,
   updateMilestoneStatus,
@@ -102,6 +103,18 @@ export async function runDecisionGateAction(
       deadline_at_time: milestone.deadline ?? project.user_deadline,
     });
 
+    await recordJudgmentEvent({
+      project_id: project.id,
+      milestone_id: milestone.id,
+      decision_id: decision.id,
+      uncertainty_id: uncertainty.id,
+      event_type: "DECISION_GATE_CHANGED",
+      payload: {
+        recommendation: evaluation.recommendation,
+        why: evaluation.why,
+      },
+    });
+
     if (evaluation.recommendation === "KEEP_RESEARCHING") {
       await updateMilestoneStatus(milestone.id, "RESEARCHING");
     } else {
@@ -139,11 +152,24 @@ export async function confirmDecisionChoiceAction(formData: FormData) {
     redirect(`/milestones/${milestone_id}`);
   }
 
-  await confirmDecisionChoice({
+  const updated = await confirmDecisionChoice({
     decision_id,
     option_id,
     status,
     user_choice_note: user_choice_note || null,
+  });
+
+  await recordJudgmentEvent({
+    project_id: updated.project_id,
+    milestone_id,
+    decision_id,
+    event_type: status === "FROZEN" ? "DECISION_FROZEN" : "DECISION_CREATED",
+    payload: {
+      selected_option: updated.selected_option,
+      status,
+      user_choice_note: updated.user_choice_note,
+      ai_recommendation: updated.ai_recommendation,
+    },
   });
 
   await updateMilestoneStatus(
@@ -159,7 +185,14 @@ export async function reopenDecisionAction(formData: FormData) {
   const decision_id = String(formData.get("decision_id") ?? "");
 
   if (decision_id) {
-    await reopenDecision(decision_id);
+    const updated = await reopenDecision(decision_id);
+    await recordJudgmentEvent({
+      project_id: updated.project_id,
+      milestone_id,
+      decision_id,
+      event_type: "DECISION_REOPENED",
+      payload: { history_len: updated.history.length },
+    });
     await updateMilestoneStatus(milestone_id, "READY_TO_DECIDE");
   }
 

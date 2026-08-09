@@ -4,8 +4,11 @@ import {
   beliefUpdates,
   decisions,
   evidence,
+  experiments,
   feedback,
+  judgmentEvents,
   milestones,
+  planProposals,
   projects,
   uncertainties,
 } from "./schema";
@@ -13,11 +16,19 @@ import type {
   BeliefUpdate,
   BeliefUpdateReviewStatus,
   Decision,
+  DecisionImpact,
   DecisionOption,
   Evidence,
   EvidenceType,
+  Experiment,
+  ExperimentStatus,
   Feedback,
+  JudgmentEvent,
+  JudgmentEventType,
   Milestone,
+  PlanProposal,
+  PlanProposalStatus,
+  PlanProposedChange,
   Project,
   SupportsOrChallenges,
   Uncertainty,
@@ -124,12 +135,71 @@ function mapFeedback(row: typeof feedback.$inferSelect): Feedback {
     id: row.id,
     milestone_id: row.milestoneId,
     decision_id: row.decisionId,
+    experiment_id: row.experimentId ?? null,
     expected_outcome: row.expectedOutcome,
     actual_outcome: row.actualOutcome,
+    difference: row.difference ?? "",
     learning: row.learning,
     confidence_before: row.confidenceBefore,
     confidence_after: row.confidenceAfter,
+    assumptions_strengthened: (row.assumptionsStrengthened ?? []) as string[],
+    assumptions_weakened: (row.assumptionsWeakened ?? []) as string[],
+    uncertainties_reduced: (row.uncertaintiesReduced ?? []) as string[],
+    new_uncertainties: (row.newUncertainties ?? []) as string[],
+    decision_impact: (row.decisionImpact ?? "NEUTRAL") as DecisionImpact,
+    suggest_reopen: Boolean(row.suggestReopen),
+    ai_analysis: row.aiAnalysis ?? "",
     created_at: row.createdAt,
+  };
+}
+
+function mapExperiment(row: typeof experiments.$inferSelect): Experiment {
+  return {
+    id: row.id,
+    milestone_id: row.milestoneId,
+    decision_id: row.decisionId,
+    action_text: row.actionText,
+    hypothesis: row.hypothesis,
+    expected_outcome: row.expectedOutcome,
+    evidence_expected: row.evidenceExpected,
+    deadline: row.deadline,
+    status: row.status as ExperimentStatus,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
+  };
+}
+
+function mapJudgmentEvent(
+  row: typeof judgmentEvents.$inferSelect,
+): JudgmentEvent {
+  return {
+    id: row.id,
+    project_id: row.projectId,
+    milestone_id: row.milestoneId,
+    decision_id: row.decisionId,
+    uncertainty_id: row.uncertaintyId,
+    event_type: row.eventType,
+    payload: (row.payload ?? {}) as Record<string, unknown>,
+    created_at: row.createdAt,
+  };
+}
+
+function mapPlanProposal(row: typeof planProposals.$inferSelect): PlanProposal {
+  return {
+    id: row.id,
+    project_id: row.projectId,
+    milestone_id: row.milestoneId,
+    trigger_kind: row.triggerKind,
+    what_changed: row.whatChanged,
+    why_not_optimal: row.whyNotOptimal,
+    proposed_changes: (row.proposedChanges ?? []) as PlanProposedChange[],
+    expected_benefit: row.expectedBenefit,
+    tradeoff_risk: row.tradeoffRisk,
+    new_unknown: row.newUnknown,
+    status: row.status as PlanProposalStatus,
+    user_note: row.userNote,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
   };
 }
 
@@ -710,12 +780,17 @@ export async function saveDecisionFromGate(input: {
     milestoneId: input.milestone_id,
     uncertaintyId: input.uncertainty_id,
     question: e.blockedDecision,
-    options: e.options.map((o) => ({
-      id: o.id,
-      label: o.label,
-      description: o.description,
-      bestEvidence: o.bestEvidence,
-    })),
+      options: e.options.map((o) => ({
+        id: o.id,
+        label: o.label,
+        description: o.description,
+        bestEvidence: o.bestEvidence,
+        contradictingEvidence: o.contradictingEvidence,
+        assumptions: o.assumptions,
+        benefits: o.benefits,
+        downsides: o.downsides,
+        importantUnknowns: o.importantUnknowns,
+      })),
     selectedOption: null as DecisionOption | null,
     reasoning: e.why,
     confidence: input.confidence_at_time ?? 0,
@@ -849,10 +924,285 @@ export async function listFeedbackForMilestone(
   return rows.map(mapFeedback);
 }
 
+export async function recordJudgmentEvent(input: {
+  project_id: string;
+  milestone_id?: string | null;
+  decision_id?: string | null;
+  uncertainty_id?: string | null;
+  event_type: JudgmentEventType | string;
+  payload?: Record<string, unknown>;
+}): Promise<JudgmentEvent> {
+  const db = await getReadyDb();
+  const rows = await db
+    .insert(judgmentEvents)
+    .values({
+      projectId: input.project_id,
+      milestoneId: input.milestone_id ?? null,
+      decisionId: input.decision_id ?? null,
+      uncertaintyId: input.uncertainty_id ?? null,
+      eventType: input.event_type,
+      payload: input.payload ?? {},
+    })
+    .returning();
+  return mapJudgmentEvent(rows[0]);
+}
+
+export async function listJudgmentEventsForProject(
+  projectId: string,
+  limit = 20,
+): Promise<JudgmentEvent[]> {
+  const db = await getReadyDb();
+  const rows = await db
+    .select()
+    .from(judgmentEvents)
+    .where(eq(judgmentEvents.projectId, projectId))
+    .orderBy(desc(judgmentEvents.createdAt))
+    .limit(limit);
+  return rows.map(mapJudgmentEvent);
+}
+
+export async function getLatestDeadlineChangeEvent(
+  projectId: string,
+): Promise<JudgmentEvent | null> {
+  const db = await getReadyDb();
+  const rows = await db
+    .select()
+    .from(judgmentEvents)
+    .where(eq(judgmentEvents.projectId, projectId))
+    .orderBy(desc(judgmentEvents.createdAt))
+    .limit(50);
+  const hit = rows.find((r) => r.eventType === "DEADLINE_CHANGED");
+  return hit ? mapJudgmentEvent(hit) : null;
+}
+
+export async function listExperimentsForMilestone(
+  milestoneId: string,
+): Promise<Experiment[]> {
+  const db = await getReadyDb();
+  const rows = await db
+    .select()
+    .from(experiments)
+    .where(eq(experiments.milestoneId, milestoneId))
+    .orderBy(desc(experiments.createdAt));
+  return rows.map(mapExperiment);
+}
+
+export async function createExperiment(input: {
+  milestone_id: string;
+  decision_id?: string | null;
+  action_text: string;
+  hypothesis?: string;
+  expected_outcome?: string;
+  evidence_expected?: string;
+  deadline?: string | null;
+  status?: ExperimentStatus;
+}): Promise<Experiment> {
+  const db = await getReadyDb();
+  const action = input.action_text.trim();
+  if (!action) throw new Error("实验/行动描述不能为空。");
+
+  const rows = await db
+    .insert(experiments)
+    .values({
+      milestoneId: input.milestone_id,
+      decisionId: input.decision_id ?? null,
+      actionText: action,
+      hypothesis: input.hypothesis?.trim() ?? "",
+      expectedOutcome: input.expected_outcome?.trim() ?? "",
+      evidenceExpected: input.evidence_expected?.trim() ?? "",
+      deadline: input.deadline?.trim() || null,
+      status: input.status ?? "RUNNING",
+    })
+    .returning();
+
+  return mapExperiment(rows[0]);
+}
+
+export async function updateExperimentStatus(
+  experimentId: string,
+  status: ExperimentStatus,
+): Promise<Experiment> {
+  const db = await getReadyDb();
+  const rows = await db
+    .update(experiments)
+    .set({
+      status,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(experiments.id, experimentId))
+    .returning();
+  if (!rows[0]) throw new Error("未找到实验。");
+  return mapExperiment(rows[0]);
+}
+
+export async function createFeedbackRecord(input: {
+  milestone_id: string;
+  decision_id?: string | null;
+  experiment_id?: string | null;
+  expected_outcome: string;
+  actual_outcome: string;
+  difference: string;
+  learning: string;
+  confidence_before?: number | null;
+  confidence_after?: number | null;
+  assumptions_strengthened?: string[];
+  assumptions_weakened?: string[];
+  uncertainties_reduced?: string[];
+  new_uncertainties?: string[];
+  decision_impact?: DecisionImpact;
+  suggest_reopen?: boolean;
+  ai_analysis?: string;
+}): Promise<Feedback> {
+  const db = await getReadyDb();
+  const rows = await db
+    .insert(feedback)
+    .values({
+      milestoneId: input.milestone_id,
+      decisionId: input.decision_id ?? null,
+      experimentId: input.experiment_id ?? null,
+      expectedOutcome: input.expected_outcome.trim(),
+      actualOutcome: input.actual_outcome.trim(),
+      difference: input.difference.trim(),
+      learning: input.learning.trim(),
+      confidenceBefore: input.confidence_before ?? null,
+      confidenceAfter: input.confidence_after ?? null,
+      assumptionsStrengthened: input.assumptions_strengthened ?? [],
+      assumptionsWeakened: input.assumptions_weakened ?? [],
+      uncertaintiesReduced: input.uncertainties_reduced ?? [],
+      newUncertainties: input.new_uncertainties ?? [],
+      decisionImpact: input.decision_impact ?? "NEUTRAL",
+      suggestReopen: input.suggest_reopen ?? false,
+      aiAnalysis: input.ai_analysis?.trim() ?? "",
+    })
+    .returning();
+  return mapFeedback(rows[0]);
+}
+
+export async function updateUncertaintyConfidence(
+  uncertaintyId: string,
+  confidence: number,
+): Promise<void> {
+  const db = await getReadyDb();
+  await db
+    .update(uncertainties)
+    .set({
+      currentConfidence: Math.min(100, Math.max(0, Math.round(confidence))),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(uncertainties.id, uncertaintyId));
+}
+
+export async function updateUncertaintyStatus(
+  uncertaintyId: string,
+  status: Uncertainty["status"],
+): Promise<void> {
+  const db = await getReadyDb();
+  await db
+    .update(uncertainties)
+    .set({
+      status,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(uncertainties.id, uncertaintyId));
+}
+
+export async function createPlanProposal(input: {
+  project_id: string;
+  milestone_id?: string | null;
+  trigger_kind: string;
+  proposal: {
+    whatChanged: string;
+    whyNotOptimal: string;
+    proposedChanges: PlanProposedChange[];
+    expectedBenefit: string;
+    tradeoffRisk: string;
+    newUnknown: string;
+  };
+}): Promise<PlanProposal> {
+  const db = await getReadyDb();
+  const p = input.proposal;
+  const rows = await db
+    .insert(planProposals)
+    .values({
+      projectId: input.project_id,
+      milestoneId: input.milestone_id ?? null,
+      triggerKind: input.trigger_kind,
+      whatChanged: p.whatChanged,
+      whyNotOptimal: p.whyNotOptimal,
+      proposedChanges: p.proposedChanges,
+      expectedBenefit: p.expectedBenefit,
+      tradeoffRisk: p.tradeoffRisk,
+      newUnknown: p.newUnknown,
+      status: "PENDING",
+    })
+    .returning();
+  return mapPlanProposal(rows[0]);
+}
+
+export async function listPlanProposalsForProject(
+  projectId: string,
+): Promise<PlanProposal[]> {
+  const db = await getReadyDb();
+  const rows = await db
+    .select()
+    .from(planProposals)
+    .where(eq(planProposals.projectId, projectId))
+    .orderBy(desc(planProposals.createdAt));
+  return rows.map(mapPlanProposal);
+}
+
+export async function getPlanProposal(
+  id: string,
+): Promise<PlanProposal | null> {
+  const db = await getReadyDb();
+  const rows = await db
+    .select()
+    .from(planProposals)
+    .where(eq(planProposals.id, id))
+    .limit(1);
+  return rows[0] ? mapPlanProposal(rows[0]) : null;
+}
+
+export async function setPlanProposalStatus(input: {
+  id: string;
+  status: PlanProposalStatus;
+  user_note?: string | null;
+}): Promise<PlanProposal> {
+  const db = await getReadyDb();
+  const rows = await db
+    .update(planProposals)
+    .set({
+      status: input.status,
+      userNote: input.user_note?.trim() || null,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(planProposals.id, input.id))
+    .returning();
+  if (!rows[0]) throw new Error("未找到重规划提案。");
+  return mapPlanProposal(rows[0]);
+}
+
+export async function appendMilestoneNote(
+  milestoneId: string,
+  note: string,
+): Promise<void> {
+  const m = await getMilestone(milestoneId);
+  if (!m) throw new Error("未找到里程碑。");
+  const db = await getReadyDb();
+  await db
+    .update(milestones)
+    .set({
+      purpose: `${m.purpose}\n\n[重规划修订] ${note}`.trim(),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(milestones.id, milestoneId));
+}
+
 export type ProjectDetail = {
   project: Project;
   uncertainties: Uncertainty[];
   milestones: Milestone[];
+  planProposals: PlanProposal[];
 };
 
 export async function getProjectDetail(
@@ -860,11 +1210,12 @@ export async function getProjectDetail(
 ): Promise<ProjectDetail | null> {
   const project = await getProject(id);
   if (!project) return null;
-  const [u, m] = await Promise.all([
+  const [u, m, proposals] = await Promise.all([
     listUncertaintiesForProject(id),
     listMilestonesForProject(id),
+    listPlanProposalsForProject(id),
   ]);
-  return { project, uncertainties: u, milestones: m };
+  return { project, uncertainties: u, milestones: m, planProposals: proposals };
 }
 
 export type MilestoneWorkspace = {
@@ -874,6 +1225,7 @@ export type MilestoneWorkspace = {
   evidence: Evidence[];
   beliefUpdatesByEvidenceId: Record<string, BeliefUpdate>;
   decisions: Decision[];
+  experiments: Experiment[];
   feedback: Feedback[];
 };
 
@@ -890,11 +1242,12 @@ export async function getMilestoneWorkspace(
     ? await getUncertainty(milestone.uncertainty_id)
     : null;
 
-  const [ev, dec, fb, updates] = await Promise.all([
+  const [ev, dec, fb, updates, exps] = await Promise.all([
     listEvidenceForMilestone(id),
     listDecisionsForMilestone(id),
     listFeedbackForMilestone(id),
     listBeliefUpdatesForMilestone(id),
+    listExperimentsForMilestone(id),
   ]);
 
   const beliefUpdatesByEvidenceId: Record<string, BeliefUpdate> = {};
@@ -909,6 +1262,7 @@ export async function getMilestoneWorkspace(
     evidence: ev,
     beliefUpdatesByEvidenceId,
     decisions: dec,
+    experiments: exps,
     feedback: fb,
   };
 }

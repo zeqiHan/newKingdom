@@ -41,7 +41,12 @@ const SYSTEM_PROMPT = `你是 JudgmentOS Decision Engine 中的 Decision Gate（
       "id": "opt_a",
       "label": "选项名",
       "description": "该选项含义",
-      "bestEvidence": ["支持该选项的证据摘要1"]
+      "bestEvidence": ["支持该选项的证据摘要1"],
+      "contradictingEvidence": ["反对或削弱该选项的证据"],
+      "assumptions": ["该选项依赖的假设"],
+      "benefits": ["收益"],
+      "downsides": ["代价/风险"],
+      "importantUnknowns": ["对该选项仍关键的未知"]
     }
   ],
   "tradeoffs": ["关键权衡1"],
@@ -70,6 +75,11 @@ type LlmGateJson = {
     label?: string;
     description?: string;
     bestEvidence?: string[];
+    contradictingEvidence?: string[];
+    assumptions?: string[];
+    benefits?: string[];
+    downsides?: string[];
+    importantUnknowns?: string[];
   }>;
   tradeoffs?: string[];
   remainingUnknowns?: string[];
@@ -230,6 +240,11 @@ ${beliefText}
         label,
         description: (o.description ?? "").trim(),
         bestEvidence: asStringList(o.bestEvidence),
+        contradictingEvidence: asStringList(o.contradictingEvidence),
+        assumptions: asStringList(o.assumptions),
+        benefits: asStringList(o.benefits),
+        downsides: asStringList(o.downsides),
+        importantUnknowns: asStringList(o.importantUnknowns),
       };
     })
     .filter((o): o is DecisionGateOption => o !== null);
@@ -241,12 +256,22 @@ ${beliefText}
         label: "基于现有信息推进",
         description: "在承认未知的前提下选择一条前进路径。",
         bestEvidence: [],
+        contradictingEvidence: [],
+        assumptions: [],
+        benefits: [],
+        downsides: [],
+        importantUnknowns: [],
       },
       {
         id: "opt_wait",
         label: "继续调研后再定",
         description: "先补关键证据，暂不锁定方向。",
         bestEvidence: [],
+        contradictingEvidence: [],
+        assumptions: [],
+        benefits: [],
+        downsides: [],
+        importantUnknowns: [],
       },
     );
   }

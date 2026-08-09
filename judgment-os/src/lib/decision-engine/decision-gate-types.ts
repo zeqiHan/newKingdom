@@ -12,8 +12,12 @@ export type DecisionGateOption = {
   id: string;
   label: string;
   description: string;
-  /** Best evidence currently supporting this option (claims / summaries). */
   bestEvidence: string[];
+  contradictingEvidence: string[];
+  assumptions: string[];
+  benefits: string[];
+  downsides: string[];
+  importantUnknowns: string[];
 };
 
 export type AiDecisionRecommendation = {

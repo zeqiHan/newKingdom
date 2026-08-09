@@ -99,6 +99,11 @@ export interface DecisionOption {
   label: string;
   description?: string;
   bestEvidence?: string[];
+  contradictingEvidence?: string[];
+  assumptions?: string[];
+  benefits?: string[];
+  downsides?: string[];
+  importantUnknowns?: string[];
 }
 
 export interface AiDecisionRecommendation {
@@ -151,16 +156,107 @@ export interface Decision {
   updated_at: string;
 }
 
+export type ExperimentStatus =
+  | "PLANNED"
+  | "RUNNING"
+  | "COMPLETED"
+  | "ABANDONED";
+
+export interface Experiment {
+  id: string;
+  milestone_id: string;
+  decision_id: string | null;
+  action_text: string;
+  hypothesis: string;
+  expected_outcome: string;
+  evidence_expected: string;
+  deadline: string | null;
+  status: ExperimentStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DecisionImpact =
+  | "SUPPORTS"
+  | "WEAKENS"
+  | "INVALIDATES"
+  | "NEUTRAL";
+
 export interface Feedback {
   id: string;
   milestone_id: string;
   decision_id: string | null;
+  experiment_id: string | null;
   expected_outcome: string;
   actual_outcome: string;
+  difference: string;
   learning: string;
   confidence_before: number | null;
   confidence_after: number | null;
+  assumptions_strengthened: string[];
+  assumptions_weakened: string[];
+  uncertainties_reduced: string[];
+  new_uncertainties: string[];
+  decision_impact: DecisionImpact;
+  suggest_reopen: boolean;
+  ai_analysis: string;
   created_at: string;
+}
+
+export type JudgmentEventType =
+  | "EVIDENCE_ADDED"
+  | "BELIEF_UPDATED"
+  | "DECISION_GATE_CHANGED"
+  | "DECISION_CREATED"
+  | "DECISION_FROZEN"
+  | "DECISION_REOPENED"
+  | "EXPERIMENT_STARTED"
+  | "FEEDBACK_CAPTURED"
+  | "UNCERTAINTY_UPDATED"
+  | "MILESTONE_ADDED"
+  | "MILESTONE_REMOVED"
+  | "PLAN_REVISED"
+  | "DEADLINE_CHANGED";
+
+export interface JudgmentEvent {
+  id: string;
+  project_id: string;
+  milestone_id: string | null;
+  decision_id: string | null;
+  uncertainty_id: string | null;
+  event_type: JudgmentEventType | string;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export type PlanProposalStatus =
+  | "PENDING"
+  | "ACCEPTED"
+  | "MODIFIED"
+  | "REJECTED";
+
+export interface PlanProposedChange {
+  type: string;
+  targetId: string | null;
+  title: string;
+  detail: string;
+}
+
+export interface PlanProposal {
+  id: string;
+  project_id: string;
+  milestone_id: string | null;
+  trigger_kind: string;
+  what_changed: string;
+  why_not_optimal: string;
+  proposed_changes: PlanProposedChange[];
+  expected_benefit: string;
+  tradeoff_risk: string;
+  new_unknown: string;
+  status: PlanProposalStatus;
+  user_note: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface BeliefUpdate {

@@ -170,6 +170,27 @@ CREATE INDEX decisions_milestone_id_idx ON decisions(milestone_id);
 CREATE INDEX decisions_uncertainty_id_idx ON decisions(uncertainty_id);
 
 -- ---------------------------------------------------------------------------
+-- Experiments (Decision → Action / Experiment)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE experiments (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  milestone_id        UUID NOT NULL REFERENCES milestones(id) ON DELETE CASCADE,
+  decision_id         UUID REFERENCES decisions(id) ON DELETE SET NULL,
+  action_text         TEXT NOT NULL DEFAULT '',
+  hypothesis          TEXT NOT NULL DEFAULT '',
+  expected_outcome    TEXT NOT NULL DEFAULT '',
+  evidence_expected   TEXT NOT NULL DEFAULT '',
+  deadline            TIMESTAMPTZ,
+  status              TEXT NOT NULL DEFAULT 'PLANNED',
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX experiments_milestone_id_idx ON experiments(milestone_id);
+CREATE INDEX experiments_decision_id_idx ON experiments(decision_id);
+
+-- ---------------------------------------------------------------------------
 -- Feedback
 -- Closes Decision → Reality.
 -- ---------------------------------------------------------------------------
@@ -178,11 +199,20 @@ CREATE TABLE feedback (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   milestone_id        UUID NOT NULL REFERENCES milestones(id) ON DELETE CASCADE,
   decision_id         UUID REFERENCES decisions(id) ON DELETE SET NULL,
+  experiment_id       UUID REFERENCES experiments(id) ON DELETE SET NULL,
   expected_outcome    TEXT NOT NULL DEFAULT '',
   actual_outcome      TEXT NOT NULL DEFAULT '',
+  difference          TEXT NOT NULL DEFAULT '',
   learning            TEXT NOT NULL DEFAULT '',
   confidence_before   INTEGER CHECK (confidence_before BETWEEN 0 AND 100),
   confidence_after    INTEGER CHECK (confidence_after BETWEEN 0 AND 100),
+  assumptions_strengthened JSONB NOT NULL DEFAULT '[]'::jsonb,
+  assumptions_weakened     JSONB NOT NULL DEFAULT '[]'::jsonb,
+  uncertainties_reduced    JSONB NOT NULL DEFAULT '[]'::jsonb,
+  new_uncertainties        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  decision_impact     TEXT NOT NULL DEFAULT 'NEUTRAL',
+  suggest_reopen      BOOLEAN NOT NULL DEFAULT false,
+  ai_analysis         TEXT NOT NULL DEFAULT '',
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -232,6 +262,25 @@ CREATE INDEX belief_updates_uncertainty_id_idx ON belief_updates(uncertainty_id)
 CREATE INDEX belief_updates_milestone_id_idx ON belief_updates(milestone_id);
 
 -- ---------------------------------------------------------------------------
+-- Judgment event history (immutable)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE judgment_events (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id       UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  milestone_id     UUID REFERENCES milestones(id) ON DELETE SET NULL,
+  decision_id      UUID REFERENCES decisions(id) ON DELETE SET NULL,
+  uncertainty_id   UUID REFERENCES uncertainties(id) ON DELETE SET NULL,
+  event_type       TEXT NOT NULL,
+  payload          JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX judgment_events_project_id_idx ON judgment_events(project_id);
+CREATE INDEX judgment_events_milestone_id_idx ON judgment_events(milestone_id);
+CREATE INDEX judgment_events_created_at_idx ON judgment_events(created_at);
+
+-- ---------------------------------------------------------------------------
 -- updated_at helper
 -- ---------------------------------------------------------------------------
 
@@ -265,4 +314,8 @@ CREATE TRIGGER decisions_set_updated_at
 
 CREATE TRIGGER belief_updates_set_updated_at
   BEFORE UPDATE ON belief_updates
+  FOR EACH ROW EXECUTE PROCEDURE set_updated_at();
+
+CREATE TRIGGER experiments_set_updated_at
+  BEFORE UPDATE ON experiments
   FOR EACH ROW EXECUTE PROCEDURE set_updated_at();
