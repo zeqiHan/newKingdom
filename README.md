@@ -5,7 +5,7 @@ Build Judgment. Not Just Decisions.
 ## Structure
 
 ```
-judgment-os/   # product (empty on Day 1)
+judgment-os/   # Next.js chassis: local DB + 3 wired screens (no AI)
 docs/          # product documents
 ```
 
