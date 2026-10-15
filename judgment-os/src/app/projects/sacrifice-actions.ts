@@ -10,7 +10,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { projects, experiments, judgmentEvents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { 
@@ -26,6 +26,7 @@ import { randomUUID } from "crypto";
  * Generate AI-proposed sacrifices for a project
  */
 export async function generateProjectSacrifices(projectId: string) {
+  const db = getDb();
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
   });
@@ -74,6 +75,7 @@ export async function acceptProjectSacrifices(
   projectId: string,
   sacrifices: Sacrifice[]
 ) {
+  const db = getDb();
   const acceptedSacrifices = sacrifices.map((s) => ({
     ...s,
     acceptedAt: new Date().toISOString(),
@@ -117,6 +119,7 @@ export async function updateProjectSacrifice(
   sacrificeId: string,
   updates: Partial<Pick<Sacrifice, "description" | "impact" | "category">>
 ) {
+  const db = getDb();
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
   });
@@ -162,6 +165,7 @@ export async function addCustomProjectSacrifice(
   projectId: string,
   sacrifice: Omit<Sacrifice, "id" | "aiGenerated" | "userModified">
 ) {
+  const db = getDb();
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
   });
@@ -210,6 +214,7 @@ export async function generateExperimentSacrifices(
   experimentId: string,
   milestoneId: string
 ) {
+  const db = getDb();
   const experiment = await db.query.experiments.findFirst({
     where: eq(experiments.id, experimentId),
   });
@@ -270,6 +275,7 @@ export async function acceptExperimentSacrifices(
   milestoneId: string,
   sacrifices: Sacrifice[]
 ) {
+  const db = getDb();
   const acceptedSacrifices = sacrifices.map((s) => ({
     ...s,
     acceptedAt: new Date().toISOString(),

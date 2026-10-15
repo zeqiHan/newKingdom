@@ -48,6 +48,8 @@ function mapProject(row: typeof projects.$inferSelect): Project {
     user_deadline: row.userDeadline,
     recommended_deadline: row.recommendedDeadline,
     status: row.status as Project["status"],
+    willing_sacrifices: row.willingSacrifices,
+    sacrifices_accepted_at: row.sacrificesAcceptedAt,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
@@ -164,6 +166,8 @@ function mapExperiment(row: typeof experiments.$inferSelect): Experiment {
     evidence_expected: row.evidenceExpected,
     deadline: row.deadline,
     status: row.status as ExperimentStatus,
+    required_sacrifices: row.requiredSacrifices,
+    sacrifices_accepted_at: row.sacrificesAcceptedAt,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };

@@ -54,6 +54,8 @@ export interface Project {
   user_deadline: string | null;
   recommended_deadline: string | null;
   status: ProjectStatus;
+  willing_sacrifices: unknown;
+  sacrifices_accepted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -172,6 +174,8 @@ export interface Experiment {
   evidence_expected: string;
   deadline: string | null;
   status: ExperimentStatus;
+  required_sacrifices: unknown;
+  sacrifices_accepted_at: string | null;
   created_at: string;
   updated_at: string;
 }
