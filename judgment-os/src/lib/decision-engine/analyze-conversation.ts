@@ -6,12 +6,20 @@
  * Users should just talk. AI extracts structure.
  */
 
-import OpenAI from "openai";
 import { randomUUID } from "crypto";
-import type { GoalProposal } from "./types";
+import { getLlmProvider } from "@/lib/llm";
 import type { Sacrifice, SacrificeCategory } from "../db/schema";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function parseJsonContent(content: string): Record<string, unknown> {
+  const trimmed = content.trim();
+  try {
+    return JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    const match = trimmed.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("模型未返回合法 JSON。");
+    return JSON.parse(match[0]) as Record<string, unknown>;
+  }
+}
 
 const ANALYSIS_SYSTEM_PROMPT = `You are a judgment advisor in JudgmentOS.
 
@@ -103,56 +111,69 @@ Return JSON in this exact format:
 Make 3 sacrifices, 3-5 uncertainties, and 3-5 milestones.
 Each milestone should link to an uncertainty by index (0, 1, 2, etc).`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
+  const llm = getLlmProvider();
+  const response = await llm.chat({
+    json: true,
+    temperature: 0.4,
     messages: [
       { role: "system", content: ANALYSIS_SYSTEM_PROMPT },
       { role: "user", content: prompt },
     ],
-    temperature: 0.7,
-    response_format: { type: "json_object" },
   });
 
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response from AI");
-  }
-
-  const parsed = JSON.parse(content);
+  const parsed = parseJsonContent(response.content) as {
+    title?: string;
+    goal?: string;
+    clarifiedGoal?: string;
+    successCriteria?: string;
+    constraints?: string;
+    willingSacrifices?: Array<{
+      category?: string;
+      description?: string;
+      impact?: string;
+    }>;
+    keyUncertainties?: Array<{ question?: string; importance?: number }>;
+    suggestedMilestones?: Array<{
+      uncertaintyIndex?: number;
+      title?: string;
+      purpose?: string;
+      expectedLearning?: string;
+    }>;
+  };
 
   // Generate IDs and link structures
-  const uncertainties = parsed.keyUncertainties.map((u: any) => ({
+  const uncertainties = (parsed.keyUncertainties ?? []).map((u) => ({
     tempId: randomUUID(),
-    question: u.question,
+    question: (u.question ?? "").trim(),
     importance: u.importance || 70,
-  }));
+  })).filter((u) => u.question.length > 0);
 
-  const milestones = parsed.suggestedMilestones.map((m: any) => {
-    const linkedUncertainty = uncertainties[m.uncertaintyIndex || 0];
+  const milestones = (parsed.suggestedMilestones ?? []).map((m) => {
+    const linkedUncertainty = uncertainties[m.uncertaintyIndex || 0] ?? uncertainties[0];
     return {
       tempId: randomUUID(),
-      uncertaintyTempId: linkedUncertainty?.tempId || uncertainties[0].tempId,
-      title: m.title,
-      purpose: m.purpose,
-      expectedLearning: m.expectedLearning,
+      uncertaintyTempId: linkedUncertainty?.tempId ?? "",
+      title: (m.title ?? "").trim(),
+      purpose: (m.purpose ?? "").trim(),
+      expectedLearning: (m.expectedLearning ?? "").trim(),
     };
-  });
+  }).filter((m) => m.title.length > 0 && m.uncertaintyTempId.length > 0);
 
-  const sacrifices: Sacrifice[] = parsed.willingSacrifices.map((s: any) => ({
+  const sacrifices: Sacrifice[] = (parsed.willingSacrifices ?? []).map((s) => ({
     id: randomUUID(),
-    category: s.category as SacrificeCategory,
-    description: s.description,
-    impact: s.impact,
+    category: (s.category as SacrificeCategory) || "OTHER",
+    description: (s.description ?? "").trim(),
+    impact: (s.impact ?? "").trim(),
     aiGenerated: true,
     userModified: false,
-  }));
+  })).filter((s) => s.description.length > 0);
 
   return {
-    title: parsed.title,
-    goal: parsed.goal,
-    clarifiedGoal: parsed.clarifiedGoal || parsed.goal,
-    successCriteria: parsed.successCriteria,
-    constraints: parsed.constraints,
+    title: (parsed.title ?? "").trim(),
+    goal: (parsed.goal ?? "").trim(),
+    clarifiedGoal: (parsed.clarifiedGoal ?? parsed.goal ?? "").trim(),
+    successCriteria: (parsed.successCriteria ?? "").trim(),
+    constraints: (parsed.constraints ?? "").trim(),
     willingSacrifices: sacrifices,
     keyUncertainties: uncertainties,
     suggestedMilestones: milestones,
@@ -190,20 +211,19 @@ What does the user want to do? Return JSON:
   "reasoning": "Why you interpreted it this way"
 }`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
+  const llm = getLlmProvider();
+  const response = await llm.chat({
+    json: true,
+    temperature: 0.4,
     messages: [
       { role: "system", content: ANALYSIS_SYSTEM_PROMPT },
       { role: "user", content: prompt },
     ],
-    temperature: 0.7,
-    response_format: { type: "json_object" },
   });
 
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response from AI");
-  }
-
-  return JSON.parse(content);
+  return parseJsonContent(response.content) as {
+    intent: "update_milestone" | "add_uncertainty" | "adjust_sacrifice" | "general";
+    changes: unknown;
+    reasoning: string;
+  };
 }

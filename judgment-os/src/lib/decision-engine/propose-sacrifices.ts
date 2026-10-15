@@ -8,11 +8,75 @@
  * 2. Action level - what this specific action will require you to sacrifice
  */
 
-import OpenAI from "openai";
 import { randomUUID } from "crypto";
+import { getLlmProvider } from "@/lib/llm";
 import type { Sacrifice, SacrificeCategory } from "../db/schema";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const CATEGORIES: SacrificeCategory[] = [
+  "TIME",
+  "QUALITY",
+  "SCOPE",
+  "RESOURCE",
+  "RISK",
+  "OTHER",
+];
+
+function parseJsonContent(content: string): unknown {
+  const trimmed = content.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const match = trimmed.match(/[\[{][\s\S]*[\]}]/);
+    if (!match) throw new Error("模型未返回合法 JSON。");
+    return JSON.parse(match[0]);
+  }
+}
+
+function asCategory(value: unknown): SacrificeCategory {
+  return CATEGORIES.includes(value as SacrificeCategory)
+    ? (value as SacrificeCategory)
+    : "OTHER";
+}
+
+async function requestSacrifices(prompt: string): Promise<Sacrifice[]> {
+  const llm = getLlmProvider();
+  const response = await llm.chat({
+    json: true,
+    temperature: 0.4,
+    messages: [
+      { role: "system", content: SACRIFICE_SYSTEM_PROMPT },
+      { role: "user", content: prompt },
+    ],
+  });
+
+  const parsed = parseJsonContent(response.content) as {
+    sacrifices?: unknown;
+  } | unknown[];
+  const sacrificesArray = Array.isArray(parsed)
+    ? parsed
+    : (parsed.sacrifices ?? parsed);
+
+  if (!Array.isArray(sacrificesArray) || sacrificesArray.length === 0) {
+    throw new Error("模型未返回可用的牺牲声明。");
+  }
+
+  const sacrifices = sacrificesArray.slice(0, 3).map((s) => {
+    const item = s as { category?: string; description?: string; impact?: string };
+    return {
+      id: randomUUID(),
+      category: asCategory(item.category),
+      description: (item.description ?? "").trim(),
+      impact: (item.impact ?? "").trim(),
+      aiGenerated: true,
+      userModified: false,
+    };
+  }).filter((s) => s.description.length > 0);
+
+  if (sacrifices.length === 0) {
+    throw new Error("模型未返回可用的牺牲声明。");
+  }
+  return sacrifices;
+}
 
 export type ProposeProjectSacrificesInput = {
   goal: string;
@@ -80,14 +144,16 @@ Each sacrifice should:
 - Cover different categories when possible
 - Be realistic - not all catastrophic, not all trivial
 
-Return ONLY a JSON array of 3 sacrifices in this format:
-[
-  {
-    "category": "TIME|QUALITY|SCOPE|RESOURCE|RISK|OTHER",
-    "description": "What will be sacrificed (specific and clear)",
-    "impact": "The real consequence of making this sacrifice (concrete effects)"
-  }
-]
+Return JSON with exactly 3 sacrifices in this format:
+{
+  "sacrifices": [
+    {
+      "category": "TIME|QUALITY|SCOPE|RESOURCE|RISK|OTHER",
+      "description": "What will be sacrificed (specific and clear)",
+      "impact": "The real consequence of making this sacrifice (concrete effects)"
+    }
+  ]
+}
 
 Think about common project tradeoffs:
 - Rushing means lower quality or technical debt
@@ -96,38 +162,9 @@ Think about common project tradeoffs:
 - Reduced risk means slower progress or more research
 - Broader scope means less depth or longer timeline
 
-Return only the JSON array, no other text.`;
+Return only the JSON object.`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      { role: "system", content: SACRIFICE_SYSTEM_PROMPT },
-      { role: "user", content: prompt },
-    ],
-    temperature: 0.7,
-    response_format: { type: "json_object" },
-  });
-
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response from OpenAI");
-  }
-
-  const parsed = JSON.parse(content);
-  const sacrificesArray = parsed.sacrifices || parsed;
-
-  if (!Array.isArray(sacrificesArray) || sacrificesArray.length !== 3) {
-    throw new Error("Invalid sacrifice proposal format");
-  }
-
-  return sacrificesArray.map((s: any) => ({
-    id: randomUUID(),
-    category: s.category as SacrificeCategory,
-    description: s.description,
-    impact: s.impact,
-    aiGenerated: true,
-    userModified: false,
-  }));
+  return requestSacrifices(prompt);
 }
 
 /**
@@ -179,45 +216,18 @@ Think about:
 - What quality/speed tradeoffs are implicit?
 - What won't get done because of this action?
 
-Return ONLY a JSON array of 3 sacrifices in this format:
-[
-  {
-    "category": "TIME|QUALITY|SCOPE|RESOURCE|RISK|OTHER",
-    "description": "What will be sacrificed by taking this action",
-    "impact": "The concrete effect this will have"
-  }
-]
+Return JSON with exactly 3 sacrifices in this format:
+{
+  "sacrifices": [
+    {
+      "category": "TIME|QUALITY|SCOPE|RESOURCE|RISK|OTHER",
+      "description": "What will be sacrificed by taking this action",
+      "impact": "The concrete effect this will have"
+    }
+  ]
+}
 
-Return only the JSON array, no other text.`;
+Return only the JSON object.`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      { role: "system", content: SACRIFICE_SYSTEM_PROMPT },
-      { role: "user", content: prompt },
-    ],
-    temperature: 0.7,
-    response_format: { type: "json_object" },
-  });
-
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response from OpenAI");
-  }
-
-  const parsed = JSON.parse(content);
-  const sacrificesArray = parsed.sacrifices || parsed;
-
-  if (!Array.isArray(sacrificesArray) || sacrificesArray.length !== 3) {
-    throw new Error("Invalid sacrifice proposal format");
-  }
-
-  return sacrificesArray.map((s: any) => ({
-    id: randomUUID(),
-    category: s.category as SacrificeCategory,
-    description: s.description,
-    impact: s.impact,
-    aiGenerated: true,
-    userModified: false,
-  }));
+  return requestSacrifices(prompt);
 }
