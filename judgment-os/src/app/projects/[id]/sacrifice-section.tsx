@@ -1,0 +1,258 @@
+"use client";
+
+/**
+ * Project Sacrifice Section
+ * 
+ * Displays and manages project-level sacrifice declarations
+ */
+
+import { useState } from "react";
+import type { Sacrifice } from "@/lib/db/schema";
+import { SacrificeDeclaration } from "@/components/sacrifice-declaration";
+import {
+  generateProjectSacrifices,
+  acceptProjectSacrifices,
+  updateProjectSacrifice,
+  addCustomProjectSacrifice,
+} from "@/app/projects/sacrifice-actions";
+
+type SacrificeSectionProps = {
+  projectId: string;
+  projectGoal: string;
+  successCriteria: string;
+  constraints: string;
+  userDeadline: string | null;
+  recommendedDeadline: string | null;
+  sacrifices: Sacrifice[];
+  sacrificesAcceptedAt: string | null;
+};
+
+export function SacrificeSection({
+  projectId,
+  projectGoal,
+  successCriteria,
+  constraints,
+  userDeadline,
+  recommendedDeadline,
+  sacrifices: initialSacrifices,
+  sacrificesAcceptedAt,
+}: SacrificeSectionProps) {
+  const [sacrifices, setSacrifices] = useState<Sacrifice[]>(initialSacrifices);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showCustomForm, setShowCustomForm] = useState(false);
+
+  const hasSacrifices = sacrifices.length > 0;
+  const isAccepted = !!sacrificesAcceptedAt;
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      const result = await generateProjectSacrifices(projectId);
+      if (result.error) {
+        setError(result.error);
+      } else if (result.sacrifices) {
+        setSacrifices(result.sacrifices);
+      }
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleAccept = async (acceptedSacrifices: Sacrifice[]) => {
+    const result = await acceptProjectSacrifices(projectId, acceptedSacrifices);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      window.location.reload();
+    }
+  };
+
+  const handleModify = async (
+    sacrificeId: string,
+    updates: Partial<Sacrifice>
+  ) => {
+    const result = await updateProjectSacrifice(projectId, sacrificeId, updates);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      setSacrifices((prev) =>
+        prev.map((s) =>
+          s.id === sacrificeId ? { ...s, ...updates, userModified: true } : s
+        )
+      );
+    }
+  };
+
+  const handleAddCustom = async (sacrifice: Omit<Sacrifice, "id" | "aiGenerated" | "userModified">) => {
+    const result = await addCustomProjectSacrifice(projectId, sacrifice);
+    if (result.error) {
+      setError(result.error);
+    } else if (result.sacrifice) {
+      setSacrifices((prev) => [...prev, result.sacrifice!]);
+      setShowCustomForm(false);
+    }
+  };
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-medium tracking-wide text-black/50 dark:text-white/50">
+        牺牲声明 (Sacrifice Declaration)
+      </h2>
+
+      <div className="border border-black/10 p-4 dark:border-white/10 space-y-4">
+        {!hasSacrifices && !isGenerating && (
+          <div className="text-center py-6">
+            <p className="text-sm text-black/60 dark:text-white/60 mb-4">
+              你必须牺牲什么，才能得到什么？
+            </p>
+            <button
+              onClick={handleGenerate}
+              className="border border-black/30 px-4 py-2 dark:border-white/30 hover:bg-black/5 dark:hover:bg-white/5"
+            >
+              生成 AI 牺牲提案
+            </button>
+          </div>
+        )}
+
+        {isGenerating && (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            <span className="ml-3 text-sm text-black/60 dark:text-white/60">
+              AI 正在分析你的目标和约束，生成牺牲提案...
+            </span>
+          </div>
+        )}
+
+        {hasSacrifices && (
+          <SacrificeDeclaration
+            sacrifices={sacrifices}
+            onAccept={handleAccept}
+            onModify={handleModify}
+            onAddCustom={() => setShowCustomForm(true)}
+            isAccepted={isAccepted}
+            level="project"
+          />
+        )}
+
+        {showCustomForm && (
+          <CustomSacrificeForm
+            onSubmit={handleAddCustom}
+            onCancel={() => setShowCustomForm(false)}
+          />
+        )}
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded text-sm">
+            错误：{error}
+          </div>
+        )}
+
+        {!hasSacrifices && (
+          <div className="text-xs text-black/40 dark:text-white/40 space-y-1">
+            <p>
+              <strong>为什么需要牺牲声明？</strong>
+            </p>
+            <p>
+              执行不值钱，判断才值钱。明确代价、不隐藏tradeoff，是 JudgmentOS 的核心原则。
+            </p>
+            <p>
+              AI 会根据你的目标、成功标准、约束条件和截止日期，生成 3 个现实的牺牲选项。
+            </p>
+            <p>你需要review、接受或修改它们，让代价变得可见。</p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+type CustomSacrificeFormProps = {
+  onSubmit: (sacrifice: Omit<Sacrifice, "id" | "aiGenerated" | "userModified">) => Promise<void>;
+  onCancel: () => void;
+};
+
+function CustomSacrificeForm({ onSubmit, onCancel }: CustomSacrificeFormProps) {
+  const [category, setCategory] = useState<Sacrifice["category"]>("OTHER");
+  const [description, setDescription] = useState("");
+  const [impact, setImpact] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      await onSubmit({
+        category,
+        description,
+        impact,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="border border-black/20 p-4 space-y-3 dark:border-white/20">
+      <h4 className="font-medium text-sm">添加自定义牺牲</h4>
+      
+      <label className="block space-y-1">
+        <span className="text-xs">类别</span>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value as Sacrifice["category"])}
+          className="w-full border border-black/20 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+        >
+          <option value="TIME">TIME - 时间</option>
+          <option value="QUALITY">QUALITY - 质量</option>
+          <option value="SCOPE">SCOPE - 范围</option>
+          <option value="RESOURCE">RESOURCE - 资源</option>
+          <option value="RISK">RISK - 风险</option>
+          <option value="OTHER">OTHER - 其他</option>
+        </select>
+      </label>
+
+      <label className="block space-y-1">
+        <span className="text-xs">将要牺牲什么</span>
+        <input
+          type="text"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          required
+          placeholder="例如：代码质量、某个功能、充足的测试时间"
+          className="w-full border border-black/20 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+        />
+      </label>
+
+      <label className="block space-y-1">
+        <span className="text-xs">影响 / 后果</span>
+        <textarea
+          value={impact}
+          onChange={(e) => setImpact(e.target.value)}
+          required
+          rows={3}
+          placeholder="具体说明这个牺牲会带来什么影响"
+          className="w-full border border-black/20 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+        />
+      </label>
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="border border-black/30 px-3 py-1 text-sm dark:border-white/30 disabled:opacity-50"
+        >
+          {isSubmitting ? "添加中..." : "添加"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="border border-black/30 px-3 py-1 text-sm dark:border-white/30"
+        >
+          取消
+        </button>
+      </div>
+    </form>
+  );
+}

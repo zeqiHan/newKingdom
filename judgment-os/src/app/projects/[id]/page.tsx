@@ -5,6 +5,7 @@ import {
   getProjectDetail,
 } from "@/lib/db/queries";
 import type { DeadlineChangeAnalysis } from "@/lib/decision-engine";
+import type { Sacrifice } from "@/lib/db/schema";
 import {
   createMilestoneAction,
   createUncertaintyAction,
@@ -14,6 +15,7 @@ import {
   proposeReplanAction,
   reviewPlanProposalAction,
 } from "./replan-actions";
+import { SacrificeSection } from "./sacrifice-section";
 
 function toDateInputValue(value: string | null): string {
   if (!value) return "";
@@ -88,6 +90,17 @@ export default async function ProjectPage({
           约束条件：{project.constraints || "—"}
         </p>
       </div>
+
+      <SacrificeSection 
+        projectId={project.id}
+        projectGoal={project.goal}
+        successCriteria={project.success_criteria}
+        constraints={project.constraints}
+        userDeadline={project.user_deadline}
+        recommendedDeadline={project.recommended_deadline}
+        sacrifices={(project.willing_sacrifices as Sacrifice[]) || []}
+        sacrificesAcceptedAt={project.sacrifices_accepted_at}
+      />
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium tracking-wide text-black/50 dark:text-white/50">

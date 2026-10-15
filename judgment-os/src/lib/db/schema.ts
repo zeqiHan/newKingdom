@@ -15,6 +15,28 @@ import {
  * Status fields stored as text for simpler inserts; DB may use enums.
  */
 
+/**
+ * Sacrifice declaration type
+ * Represents something that must be given up to achieve a goal or action
+ */
+export type SacrificeCategory = 
+  | "TIME"
+  | "QUALITY" 
+  | "SCOPE"
+  | "RESOURCE"
+  | "RISK"
+  | "OTHER";
+
+export type Sacrifice = {
+  id: string;
+  category: SacrificeCategory;
+  description: string;
+  impact: string;
+  aiGenerated: boolean;
+  userModified: boolean;
+  acceptedAt?: string;
+};
+
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .notNull()
@@ -41,6 +63,14 @@ export const projects = pgTable("projects", {
     mode: "string",
   }),
   status: text("status").notNull().default("ACTIVE"),
+  willingSacrifices: jsonb("willing_sacrifices")
+    .$type<Sacrifice[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  sacrificesAcceptedAt: timestamp("sacrifices_accepted_at", {
+    withTimezone: true,
+    mode: "string",
+  }),
   ...timestamps,
 });
 
@@ -213,6 +243,14 @@ export const experiments = pgTable("experiments", {
   evidenceExpected: text("evidence_expected").notNull().default(""),
   deadline: timestamp("deadline", { withTimezone: true, mode: "string" }),
   status: text("status").notNull().default("PLANNED"),
+  requiredSacrifices: jsonb("required_sacrifices")
+    .$type<Sacrifice[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  sacrificesAcceptedAt: timestamp("sacrifices_accepted_at", {
+    withTimezone: true,
+    mode: "string",
+  }),
   ...timestamps,
 });
 

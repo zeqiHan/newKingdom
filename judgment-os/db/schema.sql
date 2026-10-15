@@ -66,6 +66,8 @@ CREATE TABLE projects (
   user_deadline         TIMESTAMPTZ,
   recommended_deadline  TIMESTAMPTZ,
   status                project_status NOT NULL DEFAULT 'ACTIVE',
+  willing_sacrifices    JSONB NOT NULL DEFAULT '[]'::jsonb,
+  sacrifices_accepted_at TIMESTAMPTZ,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -183,6 +185,8 @@ CREATE TABLE experiments (
   evidence_expected   TEXT NOT NULL DEFAULT '',
   deadline            TIMESTAMPTZ,
   status              TEXT NOT NULL DEFAULT 'PLANNED',
+  required_sacrifices JSONB NOT NULL DEFAULT '[]'::jsonb,
+  sacrifices_accepted_at TIMESTAMPTZ,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
