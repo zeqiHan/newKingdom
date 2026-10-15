@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { listProjects } from "@/lib/db/queries";
 import { createProjectAction } from "./actions";
-import { AiGoalCreatePanel } from "./ai-goal-create-panel";
+import { ConversationCreatePanel } from "./conversation-create-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -19,15 +19,15 @@ export default async function ProjectsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">项目</h1>
         <p className="mt-1 text-sm text-black/50 dark:text-white/50">
-          AI 提出结构，由你确认。底盘 + 第一条垂直切片。
+          说一段话，AI 自动填充框架。不需要做作业式的填表。
         </p>
       </div>
 
-      <AiGoalCreatePanel />
+      <ConversationCreatePanel />
 
       <details className="border border-black/10 p-4 text-sm dark:border-white/10">
         <summary className="cursor-pointer font-medium">
-          手动创建（不用 AI）
+          或使用手动表单
         </summary>
         <form action={createProjectAction} className="mt-3 space-y-3">
           <label className="block space-y-1">
