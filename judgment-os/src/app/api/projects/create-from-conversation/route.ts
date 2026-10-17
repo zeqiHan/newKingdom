@@ -26,8 +26,10 @@ export async function POST(request: Request) {
         goal: analysis.clarifiedGoal,
         successCriteria: analysis.successCriteria,
         constraints: analysis.constraints,
-        willingSacrifices: analysis.willingSacrifices,
-        sacrificesAcceptedAt: null, // User can accept them later
+        willingSacrifices: (analysis.willingSacrifices ?? []).slice(0, 3),
+        sacrificesAcceptedAt: null,
+        userDeadline: analysis.userDeadline || null,
+        recommendedDeadline: analysis.recommendedDeadline || null,
         status: "ACTIVE",
       })
       .returning();
@@ -49,7 +51,7 @@ export async function POST(request: Request) {
     }
 
     // Create milestones
-    for (const m of analysis.suggestedMilestones) {
+    for (const m of (analysis.suggestedMilestones ?? []).slice(0, 3)) {
       const uncertaintyId = uncertaintyMap.get(m.uncertaintyTempId);
       await db.insert(milestones).values({
         projectId: project.id,

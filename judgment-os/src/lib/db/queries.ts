@@ -246,6 +246,7 @@ export type CreateProjectInput = {
   success_criteria?: string;
   constraints?: string;
   user_deadline?: string | null;
+  recommended_deadline?: string | null;
 };
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {
@@ -263,7 +264,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       successCriteria: input.success_criteria?.trim() ?? "",
       constraints: input.constraints?.trim() ?? "",
       userDeadline: input.user_deadline?.trim() || null,
-      recommendedDeadline: null,
+      recommendedDeadline: input.recommended_deadline?.trim() || null,
       status: "ACTIVE",
     })
     .returning();
@@ -287,6 +288,7 @@ export type ConfirmedProposalInput = {
     purpose: string;
     expected_learning: string;
   }>;
+  recommended_deadline?: string | null;
 };
 
 /**
@@ -301,6 +303,7 @@ export async function createProjectFromProposal(
     goal: input.clarified_goal,
     success_criteria: input.success_criteria,
     constraints: input.constraints,
+    recommended_deadline: input.recommended_deadline,
   });
 
   const uncertaintyIdByTemp = new Map<string, string>();
@@ -315,7 +318,7 @@ export async function createProjectFromProposal(
     uncertaintyIdByTemp.set(u.temp_id, created.id);
   }
 
-  for (const m of input.milestones) {
+  for (const m of input.milestones.slice(0, 3)) {
     const uncertaintyId = uncertaintyIdByTemp.get(m.uncertainty_temp_id);
     if (!uncertaintyId) {
       throw new Error(

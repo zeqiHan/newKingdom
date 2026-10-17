@@ -109,10 +109,13 @@ Core principles:
 
 When proposing sacrifices:
 1. Be specific and concrete - not vague or abstract
-2. Explain the real impact - what will actually be affected
-3. Present 3 realistic options - not all doom or all trivial
-4. Categories: TIME, QUALITY, SCOPE, RESOURCE, RISK, OTHER
-5. Make users face the real cost of their choices
+2. Return exactly 3 sacrifices. Never more.
+3. Categories: TIME, QUALITY, SCOPE, RESOURCE, RISK, OTHER
+4. Every sacrifice must state all three:
+   - Personal time: hours per week, or total days, of the user's own time
+   - Experience: the concrete stretch of life they will live through or give up
+   - Opportunity cost: the specific thing they will no longer be able to do
+5. A sacrifice that skips any of the three is invalid
 
 Remember: Your job is to expose reality, not to sugarcoat it.`;
 
@@ -143,17 +146,17 @@ Generate exactly 3 sacrifice options that the user must choose from to pursue th
 
 Each sacrifice should:
 - Be a real, concrete tradeoff (not abstract or vague)
-- Explain the specific impact it will have
 - Cover different categories when possible
 - Be realistic - not all catastrophic, not all trivial
+- State personal time as a quantity, the experience lived through or given up, and the opportunity cost
 
 Return JSON with exactly 3 sacrifices in this format:
 {
   "sacrifices": [
     {
       "category": "TIME|QUALITY|SCOPE|RESOURCE|RISK|OTHER",
-      "description": "What will be sacrificed (specific and clear)",
-      "impact": "The real consequence of making this sacrifice (concrete effects)"
+      "description": "What is given up, with the time quantity",
+      "impact": "Personal time, experience, and opportunity cost, each stated"
     }
   ]
 }
@@ -211,7 +214,8 @@ These should be:
 - Specific to THIS action (not repeating project-level sacrifices)
 - Real consequences of taking this action now
 - Different from each other in nature
-- Concrete and measurable when possible
+- Exactly 3
+- Each one states personal time as a quantity, the experience lived through or given up, and the opportunity cost
 
 Think about:
 - What resources will this action consume?

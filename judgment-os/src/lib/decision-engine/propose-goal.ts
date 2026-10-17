@@ -17,7 +17,8 @@ const SYSTEM_PROMPT = `你是 JudgmentOS 中的 Decision Engine 顾问。
 - 每个建议里程碑必须包含 expectedLearning（现实将教给我们什么）。
 - AI 提出建议，人做决定。不要假装你有不存在的确定性。
 - 不要编造事实。把未知表述为问题。
-- 关键不确定性与里程碑各优先 3–6 个。质量重于数量。
+- 关键不确定性优先 3–6 个。里程碑正好 3 个，不要更多。质量重于数量。
+- recommendedDeadline 必填，格式 YYYY-MM-DD。这是你建议三个学习里程碑能拿到现实证据的日期，不能留空。
 
 只返回合法 JSON，结构如下：
 {
@@ -25,6 +26,7 @@ const SYSTEM_PROMPT = `你是 JudgmentOS 中的 Decision Engine 顾问。
   "clarifiedGoal": "清晰目标（结果，不是实现计划）",
   "successCriteria": "如何知道目标已达成",
   "constraints": "已知约束，或空字符串",
+  "recommendedDeadline": "YYYY-MM-DD",
   "keyUncertainties": [
     {
       "question": "我们关键地不知道什么",
@@ -48,6 +50,7 @@ type LlmGoalJson = {
   clarifiedGoal?: string;
   successCriteria?: string;
   constraints?: string;
+  recommendedDeadline?: string;
   keyUncertainties?: Array<{
     question?: string;
     importance?: number;
@@ -95,7 +98,10 @@ export async function proposeGoalFromRaw(
       { role: "system", content: withOutputLanguage(SYSTEM_PROMPT, locale) },
       {
         role: "user",
-        content: withOutputLanguage(`用户的自然语言原始目标：\n\n${goal}`, locale),
+        content: withOutputLanguage(
+          `今天是 ${new Date().toISOString().slice(0, 10)}。\n\n用户的自然语言原始目标：\n\n${goal}\n\nrecommendedDeadline 必须是 YYYY-MM-DD，不能留空。里程碑正好 3 个。`,
+          locale,
+        ),
       },
     ],
   });
@@ -122,6 +128,7 @@ export async function proposeGoalFromRaw(
     const title = (m.title ?? "").trim();
     const expectedLearning = (m.expectedLearning ?? "").trim();
     if (!title || !expectedLearning) continue;
+    if (suggestedMilestones.length >= 3) continue;
     suggestedMilestones.push({
       tempId: String(randomUUID()),
       uncertaintyTempId: uncertainty.tempId,
@@ -150,6 +157,7 @@ export async function proposeGoalFromRaw(
     clarifiedGoal,
     successCriteria: (parsed.successCriteria ?? "").trim(),
     constraints: (parsed.constraints ?? "").trim(),
+    recommendedDeadline: asIsoDate(parsed.recommendedDeadline) ?? defaultRecommendedDate(),
     keyUncertainties,
     suggestedMilestones,
   };
@@ -209,7 +217,22 @@ export function validateGoalProposal(proposal: GoalProposal): GoalProposal {
     clarifiedGoal,
     successCriteria: (proposal.successCriteria ?? "").trim(),
     constraints: (proposal.constraints ?? "").trim(),
+    recommendedDeadline: proposal.recommendedDeadline,
     keyUncertainties,
-    suggestedMilestones,
+    suggestedMilestones: suggestedMilestones.slice(0, 3),
   };
+}
+
+function asIsoDate(value: unknown): string | null {
+  const match = String(value ?? "").trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  if (!match) return null;
+  const time = Date.parse(`${match[1]}T00:00:00.000Z`);
+  if (Number.isNaN(time)) return null;
+  return match[1];
+}
+
+function defaultRecommendedDate(): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + 21);
+  return date.toISOString().slice(0, 10);
 }

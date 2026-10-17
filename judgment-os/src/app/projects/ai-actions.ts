@@ -39,6 +39,7 @@ export async function confirmGoalProposalAction(
       clarified_goal: validated.clarifiedGoal,
       success_criteria: validated.successCriteria,
       constraints: validated.constraints,
+      recommended_deadline: validated.recommendedDeadline ?? null,
       uncertainties: validated.keyUncertainties.map((u) => ({
         temp_id: u.tempId,
         question: u.question,

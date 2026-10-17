@@ -25,6 +25,8 @@ export type GoalProposal = {
   clarifiedGoal: string;
   successCriteria: string;
   constraints: string;
+  /** YYYY-MM-DD. Always set by the model path. */
+  recommendedDeadline?: string;
   keyUncertainties: ProposedUncertainty[];
   suggestedMilestones: ProposedMilestone[];
 };

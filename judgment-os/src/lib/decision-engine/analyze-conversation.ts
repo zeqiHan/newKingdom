@@ -34,9 +34,10 @@ Extract:
 2. Title (short, clear project name)
 3. Success Criteria (how to know if succeeded)
 4. Constraints (limitations: time, resources, skills, etc.)
-5. Willing Sacrifices (3 realistic tradeoffs they must accept)
+5. Willing Sacrifices (exactly 3)
 6. Key Uncertainties (3-5 critical unknowns)
-7. Suggested Milestones (3-5 learning-focused milestones)
+7. Suggested Milestones (exactly 3, learning-focused)
+8. recommendedDeadline (required YYYY-MM-DD)
 
 Principles:
 - Be concrete and specific, not vague
@@ -44,6 +45,9 @@ Principles:
 - Make uncertainties about real unknowns, not obvious tasks
 - Make milestones about learning, not just doing
 - Make sacrifices realistic, not catastrophic
+- Every sacrifice states personal time (a quantity), the concrete experience lived through or given up, and the opportunity cost
+- Never return more than 3 sacrifices or more than 3 milestones
+- recommendedDeadline is always a real date. Never omit it.
 
 Return structured JSON.`;
 
@@ -66,6 +70,10 @@ export type ConversationAnalysis = {
     purpose: string;
     expectedLearning: string;
   }>;
+  /** YYYY-MM-DD. Always set. */
+  recommendedDeadline: string;
+  /** YYYY-MM-DD when the user stated a date or duration; otherwise null. */
+  userDeadline: string | null;
 };
 
 /**
@@ -75,9 +83,12 @@ export async function analyzeConversationInput(
   userInput: string,
   locale: Locale = "zh",
 ): Promise<ConversationAnalysis> {
+  const today = new Date().toISOString().slice(0, 10);
   const prompt = `User said:
 
 "${userInput}"
+
+Today is ${today}.
 
 Extract complete project structure from this. Be specific and concrete.
 
@@ -88,11 +99,13 @@ Return JSON in this exact format:
   "clarifiedGoal": "More detailed/clarified version if needed, or same as goal",
   "successCriteria": "Concrete ways to know if project succeeded",
   "constraints": "Time, resource, skill, or other limitations",
+  "userDeadline": "YYYY-MM-DD if the user stated a date or a duration you can count from today, otherwise empty string",
+  "recommendedDeadline": "YYYY-MM-DD, required. Your own suggestion for when the three learning milestones can produce real evidence. It may be later than the user's wished date. Never omit it.",
   "willingSacrifices": [
     {
       "category": "TIME|QUALITY|SCOPE|RESOURCE|RISK|OTHER",
-      "description": "What will be sacrificed",
-      "impact": "Concrete consequences"
+      "description": "What is given up, including a time quantity",
+      "impact": "Personal time + experience + opportunity cost"
     }
   ],
   "keyUncertainties": [
@@ -111,8 +124,14 @@ Return JSON in this exact format:
   ]
 }
 
-Make 3 sacrifices, 3-5 uncertainties, and 3-5 milestones.
-Each milestone should link to an uncertainty by index (0, 1, 2, etc).`;
+Counts: exactly 3 sacrifices, 3-5 uncertainties, exactly 3 milestones.
+Each milestone links to an uncertainty by index (0, 1, or 2).
+
+Every sacrifice must include all three:
+- Personal time: hours per week, or total days, of the user's own time
+- Experience: the concrete stretch of life they will live through or give up
+- Opportunity cost: the specific thing they will no longer be able to do
+A sacrifice that skips any of the three is invalid.`;
 
   const llm = getLlmProvider();
   const response = await llm.chat({
@@ -142,6 +161,8 @@ Each milestone should link to an uncertainty by index (0, 1, 2, etc).`;
       purpose?: string;
       expectedLearning?: string;
     }>;
+    recommendedDeadline?: string;
+    userDeadline?: string;
   };
 
   // Generate IDs and link structures
@@ -160,7 +181,7 @@ Each milestone should link to an uncertainty by index (0, 1, 2, etc).`;
       purpose: (m.purpose ?? "").trim(),
       expectedLearning: (m.expectedLearning ?? "").trim(),
     };
-  }).filter((m) => m.title.length > 0 && m.uncertaintyTempId.length > 0);
+  }).filter((m) => m.title.length > 0 && m.uncertaintyTempId.length > 0).slice(0, 3);
 
   const sacrifices: Sacrifice[] = (parsed.willingSacrifices ?? []).map((s) => ({
     id: randomUUID(),
@@ -169,7 +190,7 @@ Each milestone should link to an uncertainty by index (0, 1, 2, etc).`;
     impact: (s.impact ?? "").trim(),
     aiGenerated: true,
     userModified: false,
-  })).filter((s) => s.description.length > 0);
+  })).filter((s) => s.description.length > 0).slice(0, 3);
 
   return {
     title: (parsed.title ?? "").trim(),
@@ -180,7 +201,23 @@ Each milestone should link to an uncertainty by index (0, 1, 2, etc).`;
     willingSacrifices: sacrifices,
     keyUncertainties: uncertainties,
     suggestedMilestones: milestones,
+    recommendedDeadline: asIsoDate(parsed.recommendedDeadline) ?? defaultRecommendedDate(),
+    userDeadline: asIsoDate(parsed.userDeadline),
   };
+}
+
+function asIsoDate(value: unknown): string | null {
+  const match = String(value ?? "").trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  if (!match) return null;
+  const time = Date.parse(`${match[1]}T00:00:00.000Z`);
+  if (Number.isNaN(time)) return null;
+  return match[1];
+}
+
+function defaultRecommendedDate(): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + 21);
+  return date.toISOString().slice(0, 10);
 }
 
 /**

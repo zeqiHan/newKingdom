@@ -158,6 +158,13 @@ function ProjectAnalysisPreview({
           </span>
         </div>
 
+        <div className="mb-3 space-y-1 text-xs text-black/70 dark:text-white/70">
+          <p>{copy("previewRecommended", { date: analysis.recommendedDeadline })}</p>
+          {analysis.userDeadline ? (
+            <p>{copy("previewUserDeadline", { date: analysis.userDeadline })}</p>
+          ) : null}
+        </div>
+
         <div className="grid grid-cols-3 gap-3 text-xs">
           <div>
             <span className="text-black/50 dark:text-white/50">{copy("sacrificeDecl")}</span>
