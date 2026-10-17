@@ -159,6 +159,12 @@ function ProjectAnalysisPreview({
           {analysis.userDeadline ? (
             <p>{copy("previewUserDeadline", { date: analysis.userDeadline })}</p>
           ) : null}
+          {analysis.suggestedMilestones.map((m, i) => (
+            <p key={m.tempId}>
+              {i + 1}. {m.title}
+              {copy("milestoneDeadline", { date: m.deadline })}
+            </p>
+          ))}
         </div>
 
         <div className="grid grid-cols-3 gap-3 text-xs">
@@ -226,7 +232,10 @@ function ProjectAnalysisPreview({
           <Section title={copy("milestones")}>
             {analysis.suggestedMilestones.map((m, i) => (
               <div key={m.tempId}>
-                <p className="font-medium">{i + 1}. {m.title}</p>
+                <p className="font-medium">
+                  {i + 1}. {m.title}
+                  {copy("milestoneDeadline", { date: m.deadline })}
+                </p>
                 <p className="text-xs text-black/60 dark:text-white/60 mt-1">
                   {copy("expectedLearningOf", { text: m.expectedLearning })}
                 </p>

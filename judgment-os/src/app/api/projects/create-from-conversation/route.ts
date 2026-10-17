@@ -59,6 +59,7 @@ export async function POST(request: Request) {
         title: m.title,
         purpose: m.purpose,
         expectedLearning: m.expectedLearning,
+        deadline: m.deadline || null,
         status: "PROPOSED",
       });
     }

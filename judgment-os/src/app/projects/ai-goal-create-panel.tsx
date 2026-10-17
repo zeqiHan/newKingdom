@@ -141,6 +141,7 @@ export function AiGoalCreatePanel() {
         title: "",
         purpose: "",
         expectedLearning: "",
+        deadline: "",
       };
       return {
         ...prev,

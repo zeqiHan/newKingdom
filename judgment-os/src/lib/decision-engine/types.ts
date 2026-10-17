@@ -17,6 +17,8 @@ export type ProposedMilestone = {
   purpose: string;
   /** Required — why this milestone exists (learning, not task completion). */
   expectedLearning: string;
+  /** YYYY-MM-DD. The first milestone is never later than today+3. */
+  deadline: string;
 };
 
 export type GoalProposal = {

@@ -287,6 +287,7 @@ export type ConfirmedProposalInput = {
     title: string;
     purpose: string;
     expected_learning: string;
+    deadline?: string | null;
   }>;
   recommended_deadline?: string | null;
 };
@@ -331,6 +332,7 @@ export async function createProjectFromProposal(
       title: m.title,
       purpose: m.purpose,
       expected_learning: m.expected_learning,
+      deadline: m.deadline,
     });
   }
 

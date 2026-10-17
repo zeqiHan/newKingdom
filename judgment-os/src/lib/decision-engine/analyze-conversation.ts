@@ -10,6 +10,11 @@ import { randomUUID } from "crypto";
 import { getLlmProvider } from "@/lib/llm";
 import type { Locale } from "@/lib/i18n";
 import type { Sacrifice, SacrificeCategory } from "../db/schema";
+import {
+  asIsoDate,
+  assignMilestoneDeadlines,
+  defaultRecommendedDate,
+} from "./milestone-deadlines";
 import { withOutputLanguage } from "./output-language";
 
 function parseJsonContent(content: string): Record<string, unknown> {
@@ -36,7 +41,7 @@ Extract:
 4. Constraints (limitations: time, resources, skills, etc.)
 5. Willing Sacrifices (exactly 3)
 6. Key Uncertainties (3-5 critical unknowns)
-7. Suggested Milestones (exactly 3, learning-focused)
+7. Suggested Milestones (exactly 3, learning-focused, each with a deadline)
 8. recommendedDeadline (required YYYY-MM-DD)
 
 Principles:
@@ -48,6 +53,9 @@ Principles:
 - Every sacrifice states personal time (a quantity), the concrete experience lived through or given up, and the opportunity cost
 - Never return more than 3 sacrifices or more than 3 milestones
 - recommendedDeadline is always a real date. Never omit it.
+- Every milestone has a deadline (YYYY-MM-DD).
+- The first milestone is small enough to finish within 3 days and produce a real first result by then. Its deadline is today+3 or earlier. Do not compress a large phase into 3 days.
+- The second and third milestone deadlines come after the first, in order, and the last one is on or before recommendedDeadline.
 
 Return structured JSON.`;
 
@@ -69,6 +77,8 @@ export type ConversationAnalysis = {
     title: string;
     purpose: string;
     expectedLearning: string;
+    /** YYYY-MM-DD. The first is never later than today+3. */
+    deadline: string;
   }>;
   /** YYYY-MM-DD. Always set. */
   recommendedDeadline: string;
@@ -119,13 +129,16 @@ Return JSON in this exact format:
       "uncertaintyIndex": 0,
       "title": "Milestone name",
       "purpose": "Why this milestone exists",
-      "expectedLearning": "What we'll learn from completing it"
+      "expectedLearning": "What we'll learn from completing it",
+      "deadline": "YYYY-MM-DD"
     }
   ]
 }
 
 Counts: exactly 3 sacrifices, 3-5 uncertainties, exactly 3 milestones.
 Each milestone links to an uncertainty by index (0, 1, or 2).
+The first milestone's deadline is ${today} plus 3 days or earlier, and the milestone itself must be something the user can finish in those 3 days to get a first result.
+The other two deadlines are later, in order, and the last is on or before recommendedDeadline.
 
 Every sacrifice must include all three:
 - Personal time: hours per week, or total days, of the user's own time
@@ -160,6 +173,7 @@ A sacrifice that skips any of the three is invalid.`;
       title?: string;
       purpose?: string;
       expectedLearning?: string;
+      deadline?: string;
     }>;
     recommendedDeadline?: string;
     userDeadline?: string;
@@ -180,8 +194,16 @@ A sacrifice that skips any of the three is invalid.`;
       title: (m.title ?? "").trim(),
       purpose: (m.purpose ?? "").trim(),
       expectedLearning: (m.expectedLearning ?? "").trim(),
+      deadline: asIsoDate(m.deadline),
     };
   }).filter((m) => m.title.length > 0 && m.uncertaintyTempId.length > 0).slice(0, 3);
+
+  const recommendedDeadline = asIsoDate(parsed.recommendedDeadline) ?? defaultRecommendedDate(today);
+  const milestoneDates = assignMilestoneDeadlines(
+    milestones.map((m) => m.deadline),
+    recommendedDeadline,
+    today,
+  );
 
   const sacrifices: Sacrifice[] = (parsed.willingSacrifices ?? []).map((s) => ({
     id: randomUUID(),
@@ -200,24 +222,13 @@ A sacrifice that skips any of the three is invalid.`;
     constraints: (parsed.constraints ?? "").trim(),
     willingSacrifices: sacrifices,
     keyUncertainties: uncertainties,
-    suggestedMilestones: milestones,
-    recommendedDeadline: asIsoDate(parsed.recommendedDeadline) ?? defaultRecommendedDate(),
+    suggestedMilestones: milestones.map((m, index) => ({
+      ...m,
+      deadline: milestoneDates[index],
+    })),
+    recommendedDeadline,
     userDeadline: asIsoDate(parsed.userDeadline),
   };
-}
-
-function asIsoDate(value: unknown): string | null {
-  const match = String(value ?? "").trim().match(/^(\d{4}-\d{2}-\d{2})/);
-  if (!match) return null;
-  const time = Date.parse(`${match[1]}T00:00:00.000Z`);
-  if (Number.isNaN(time)) return null;
-  return match[1];
-}
-
-function defaultRecommendedDate(): string {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() + 21);
-  return date.toISOString().slice(0, 10);
 }
 
 /**

@@ -2,6 +2,11 @@ import { randomUUID } from "crypto";
 import { getLlmProvider } from "@/lib/llm";
 import type { Locale } from "@/lib/i18n";
 import type { GoalProposal, ProposedMilestone, ProposedUncertainty } from "./types";
+import {
+  asIsoDate,
+  assignMilestoneDeadlines,
+  defaultRecommendedDate,
+} from "./milestone-deadlines";
 import { withOutputLanguage } from "./output-language";
 
 const SYSTEM_PROMPT = `你是 JudgmentOS 中的 Decision Engine 顾问。
@@ -19,6 +24,9 @@ const SYSTEM_PROMPT = `你是 JudgmentOS 中的 Decision Engine 顾问。
 - 不要编造事实。把未知表述为问题。
 - 关键不确定性优先 3–6 个。里程碑正好 3 个，不要更多。质量重于数量。
 - recommendedDeadline 必填，格式 YYYY-MM-DD。这是你建议三个学习里程碑能拿到现实证据的日期，不能留空。
+- 每个里程碑必须带 deadline，格式 YYYY-MM-DD。
+- 第一个里程碑必须能在三天内做完，并且按这个期限来设计：三天内拿到第一个真实成果。截止日期不晚于今天起第 3 天。不要把一个大阶段硬压进三天。
+- 第 2、第 3 个里程碑的截止日期依次排在第一个之后，最后一个不晚于 recommendedDeadline。
 
 只返回合法 JSON，结构如下：
 {
@@ -38,7 +46,8 @@ const SYSTEM_PROMPT = `你是 JudgmentOS 中的 Decision Engine 顾问。
       "uncertaintyIndex": 0,
       "title": "作为现实中学习行动的里程碑",
       "purpose": "它减少哪个不确定性以及为什么",
-      "expectedLearning": "我们期望获得什么信息/反馈"
+      "expectedLearning": "我们期望获得什么信息/反馈",
+      "deadline": "YYYY-MM-DD"
     }
   ]
 }
@@ -60,6 +69,7 @@ type LlmGoalJson = {
     title?: string;
     purpose?: string;
     expectedLearning?: string;
+    deadline?: string;
   }>;
 };
 
@@ -99,7 +109,7 @@ export async function proposeGoalFromRaw(
       {
         role: "user",
         content: withOutputLanguage(
-          `今天是 ${new Date().toISOString().slice(0, 10)}。\n\n用户的自然语言原始目标：\n\n${goal}\n\nrecommendedDeadline 必须是 YYYY-MM-DD，不能留空。里程碑正好 3 个。`,
+          `今天是 ${new Date().toISOString().slice(0, 10)}。\n\n用户的自然语言原始目标：\n\n${goal}\n\nrecommendedDeadline 必须是 YYYY-MM-DD，不能留空。里程碑正好 3 个，每个都有 deadline。第一个里程碑的 deadline 不晚于今天起第 3 天，而且这件事本身要能在三天内做完并拿到第一个成果。后两个依次排在它后面，最后一个不晚于 recommendedDeadline。`,
           locale,
         ),
       },
@@ -135,6 +145,7 @@ export async function proposeGoalFromRaw(
       title,
       purpose: (m.purpose ?? "").trim(),
       expectedLearning,
+      deadline: asIsoDate(m.deadline) ?? "",
     });
   }
 
@@ -151,15 +162,22 @@ export async function proposeGoalFromRaw(
     clarifiedGoal.slice(0, 80) ||
     "未命名项目";
 
+  const recommendedDeadline =
+    asIsoDate(parsed.recommendedDeadline) ?? defaultRecommendedDate();
+  const datedMilestones = withMilestoneDeadlines(
+    suggestedMilestones,
+    recommendedDeadline,
+  );
+
   return {
     rawGoal: goal,
     title,
     clarifiedGoal,
     successCriteria: (parsed.successCriteria ?? "").trim(),
     constraints: (parsed.constraints ?? "").trim(),
-    recommendedDeadline: asIsoDate(parsed.recommendedDeadline) ?? defaultRecommendedDate(),
+    recommendedDeadline,
     keyUncertainties,
-    suggestedMilestones,
+    suggestedMilestones: datedMilestones,
   };
 }
 
@@ -196,6 +214,7 @@ export function validateGoalProposal(proposal: GoalProposal): GoalProposal {
       purpose: (m.purpose ?? "").trim(),
       expectedLearning: (m.expectedLearning ?? "").trim(),
       uncertaintyTempId: m.uncertaintyTempId,
+      deadline: m.deadline,
     }))
     .filter((m) => m.title && m.expectedLearning);
 
@@ -211,28 +230,31 @@ export function validateGoalProposal(proposal: GoalProposal): GoalProposal {
     throw new Error("至少需要一个含预期学习的里程碑。");
   }
 
+  const recommendedDeadline =
+    asIsoDate(proposal.recommendedDeadline) ?? defaultRecommendedDate();
+
   return {
     rawGoal: proposal.rawGoal.trim(),
     title,
     clarifiedGoal,
     successCriteria: (proposal.successCriteria ?? "").trim(),
     constraints: (proposal.constraints ?? "").trim(),
-    recommendedDeadline: proposal.recommendedDeadline,
+    recommendedDeadline,
     keyUncertainties,
-    suggestedMilestones: suggestedMilestones.slice(0, 3),
+    suggestedMilestones: withMilestoneDeadlines(
+      suggestedMilestones.slice(0, 3),
+      recommendedDeadline,
+    ),
   };
 }
 
-function asIsoDate(value: unknown): string | null {
-  const match = String(value ?? "").trim().match(/^(\d{4}-\d{2}-\d{2})/);
-  if (!match) return null;
-  const time = Date.parse(`${match[1]}T00:00:00.000Z`);
-  if (Number.isNaN(time)) return null;
-  return match[1];
-}
-
-function defaultRecommendedDate(): string {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() + 21);
-  return date.toISOString().slice(0, 10);
+function withMilestoneDeadlines<T extends { deadline?: string }>(
+  milestones: T[],
+  recommendedDeadline: string,
+): Array<T & { deadline: string }> {
+  const dates = assignMilestoneDeadlines(
+    milestones.map((m) => m.deadline),
+    recommendedDeadline,
+  );
+  return milestones.map((m, index) => ({ ...m, deadline: dates[index] }));
 }

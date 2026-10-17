@@ -50,6 +50,7 @@ export async function confirmGoalProposalAction(
         title: m.title,
         purpose: m.purpose,
         expected_learning: m.expectedLearning,
+        deadline: m.deadline,
       })),
     });
     return { ok: true, projectId: project.id };
