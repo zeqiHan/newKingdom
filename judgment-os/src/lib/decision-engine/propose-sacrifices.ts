@@ -10,7 +10,9 @@
 
 import { randomUUID } from "crypto";
 import { getLlmProvider } from "@/lib/llm";
+import type { Locale } from "@/lib/i18n";
 import type { Sacrifice, SacrificeCategory } from "../db/schema";
+import { withOutputLanguage } from "./output-language";
 
 const CATEGORIES: SacrificeCategory[] = [
   "TIME",
@@ -38,14 +40,14 @@ function asCategory(value: unknown): SacrificeCategory {
     : "OTHER";
 }
 
-async function requestSacrifices(prompt: string): Promise<Sacrifice[]> {
+async function requestSacrifices(prompt: string, locale: Locale): Promise<Sacrifice[]> {
   const llm = getLlmProvider();
   const response = await llm.chat({
     json: true,
     temperature: 0.4,
     messages: [
-      { role: "system", content: SACRIFICE_SYSTEM_PROMPT },
-      { role: "user", content: prompt },
+      { role: "system", content: withOutputLanguage(SACRIFICE_SYSTEM_PROMPT, locale) },
+      { role: "user", content: withOutputLanguage(prompt, locale) },
     ],
   });
 
@@ -118,7 +120,8 @@ Remember: Your job is to expose reality, not to sugarcoat it.`;
  * Generate 3 sacrifice options for a project at creation time
  */
 export async function proposeProjectSacrifices(
-  input: ProposeProjectSacrificesInput
+  input: ProposeProjectSacrificesInput,
+  locale: Locale = "zh",
 ): Promise<Sacrifice[]> {
   const { goal, successCriteria, constraints, userDeadline, recommendedDeadline } = input;
 
@@ -164,14 +167,15 @@ Think about common project tradeoffs:
 
 Return only the JSON object.`;
 
-  return requestSacrifices(prompt);
+  return requestSacrifices(prompt, locale);
 }
 
 /**
  * Generate 3 sacrifice options for a specific action/experiment
  */
 export async function proposeActionSacrifices(
-  input: ProposeActionSacrificesInput
+  input: ProposeActionSacrificesInput,
+  locale: Locale = "zh",
 ): Promise<Sacrifice[]> {
   const {
     projectGoal,
@@ -229,5 +233,5 @@ Return JSON with exactly 3 sacrifices in this format:
 
 Return only the JSON object.`;
 
-  return requestSacrifices(prompt);
+  return requestSacrifices(prompt, locale);
 }

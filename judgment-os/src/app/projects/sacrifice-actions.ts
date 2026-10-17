@@ -21,6 +21,7 @@ import {
 } from "@/lib/decision-engine/propose-sacrifices";
 import type { Sacrifice } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
+import { getLocale } from "@/lib/locale.server";
 
 /**
  * Generate AI-proposed sacrifices for a project
@@ -44,7 +45,7 @@ export async function generateProjectSacrifices(projectId: string) {
   };
 
   try {
-    const sacrifices = await proposeProjectSacrifices(input);
+    const sacrifices = await proposeProjectSacrifices(input, await getLocale());
 
     await db
       .update(projects)
@@ -242,7 +243,7 @@ export async function generateExperimentSacrifices(
   };
 
   try {
-    const sacrifices = await proposeActionSacrifices(input);
+    const sacrifices = await proposeActionSacrifices(input, await getLocale());
 
     await db
       .update(experiments)

@@ -1,4 +1,6 @@
 import { getLlmProvider } from "@/lib/llm";
+import type { Locale } from "@/lib/i18n";
+import { withOutputLanguage } from "./output-language";
 import type {
   BeliefUpdateAnalysis,
   BeliefUpdatePrior,
@@ -17,7 +19,6 @@ const SYSTEM_PROMPT = `你是 JudgmentOS Decision Engine 中的信念更新顾�
 - 证据应更新信念，但不应自动消解不确定性。
 - 禁止制造虚假确定性。必须明确写出仍然未知的部分。
 - AI 提出解释；人可以质疑与修正。
-- 所有面向用户的文本使用简体中文。
 
 只返回合法 JSON：
 {
@@ -102,6 +103,7 @@ export type AnalyzeEvidenceInput = {
  */
 export async function analyzeEvidenceBeliefUpdate(
   input: AnalyzeEvidenceInput,
+  locale: Locale = "zh",
 ): Promise<BeliefUpdateAnalysis> {
   const llm = getLlmProvider();
 
@@ -119,10 +121,10 @@ export async function analyzeEvidenceBeliefUpdate(
     json: true,
     temperature: 0.2,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: withOutputLanguage(SYSTEM_PROMPT, locale) },
       {
         role: "user",
-        content: `不确定性问题：
+        content: withOutputLanguage(`不确定性问题：
 ${input.uncertaintyQuestion}
 
 当前信心（priorConfidence）：${input.priorConfidence}
@@ -139,7 +141,7 @@ ${priorText}
 - 来源：${input.newEvidence.source || "（无）"}
 - 用户给该陈述的信心：${input.newEvidence.userConfidence}
 
-请分析这条新证据对信念的影响。记住：来源不等于事实；勿制造虚假确定性。`,
+请分析这条新证据对信念的影响。记住：来源不等于事实；勿制造虚假确定性。`, locale),
       },
     ],
   });

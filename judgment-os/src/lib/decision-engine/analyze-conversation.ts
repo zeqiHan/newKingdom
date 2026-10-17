@@ -8,7 +8,9 @@
 
 import { randomUUID } from "crypto";
 import { getLlmProvider } from "@/lib/llm";
+import type { Locale } from "@/lib/i18n";
 import type { Sacrifice, SacrificeCategory } from "../db/schema";
+import { withOutputLanguage } from "./output-language";
 
 function parseJsonContent(content: string): Record<string, unknown> {
   const trimmed = content.trim();
@@ -70,7 +72,8 @@ export type ConversationAnalysis = {
  * Analyze user's natural language input and extract full project structure
  */
 export async function analyzeConversationInput(
-  userInput: string
+  userInput: string,
+  locale: Locale = "zh",
 ): Promise<ConversationAnalysis> {
   const prompt = `User said:
 
@@ -116,8 +119,8 @@ Each milestone should link to an uncertainty by index (0, 1, 2, etc).`;
     json: true,
     temperature: 0.4,
     messages: [
-      { role: "system", content: ANALYSIS_SYSTEM_PROMPT },
-      { role: "user", content: prompt },
+      { role: "system", content: withOutputLanguage(ANALYSIS_SYSTEM_PROMPT, locale) },
+      { role: "user", content: withOutputLanguage(prompt, locale) },
     ],
   });
 
@@ -189,7 +192,8 @@ export async function analyzeUpdate(
     projectGoal: string;
     currentMilestones: string[];
     currentUncertainties: string[];
-  }
+  },
+  locale: Locale = "zh",
 ): Promise<{
   intent: "update_milestone" | "add_uncertainty" | "adjust_sacrifice" | "general";
   changes: any;
@@ -216,8 +220,8 @@ What does the user want to do? Return JSON:
     json: true,
     temperature: 0.4,
     messages: [
-      { role: "system", content: ANALYSIS_SYSTEM_PROMPT },
-      { role: "user", content: prompt },
+      { role: "system", content: withOutputLanguage(ANALYSIS_SYSTEM_PROMPT, locale) },
+      { role: "user", content: withOutputLanguage(prompt, locale) },
     ],
   });
 

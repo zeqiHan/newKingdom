@@ -1,4 +1,6 @@
 import { getLlmProvider } from "@/lib/llm";
+import type { Locale } from "@/lib/i18n";
+import { withOutputLanguage } from "./output-language";
 
 export type PlanChangeType =
   | "ADD_MILESTONE"
@@ -33,7 +35,6 @@ const SYSTEM_PROMPT = `你是 JudgmentOS Decision Engine 的动态重规划顾�
 - AI 只提案，绝不静默改写计划。
 - 说明 WHAT CHANGED / WHY / PROPOSED CHANGE / BENEFIT / TRADEOFF。
 - 里程碑必须绑定不确定性与学习，禁止变成 TODO 清单。
-- 所有面向用户的文本使用简体中文。
 
 只返回合法 JSON：
 {
@@ -92,16 +93,16 @@ export async function proposeReplan(input: {
   }>;
   recentFeedbackLearning: string | null;
   triggerNote: string;
-}): Promise<ReplanProposal> {
+}, locale: Locale = "zh"): Promise<ReplanProposal> {
   const llm = getLlmProvider();
   const response = await llm.chat({
     json: true,
     temperature: 0.2,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: withOutputLanguage(SYSTEM_PROMPT, locale) },
       {
         role: "user",
-        content: `项目：${input.projectTitle}
+        content: withOutputLanguage(`项目：${input.projectTitle}
 目标：${input.projectGoal}
 用户截止日期：${input.userDeadline || "—"}
 
@@ -121,7 +122,7 @@ ${
     .join("\n") || "（无）"
 }
 
-请提案是否以及如何重规划。不要静默执行。`,
+请提案是否以及如何重规划。不要静默执行。`, locale),
       },
     ],
   });

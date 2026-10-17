@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import { getLlmProvider } from "@/lib/llm";
+import type { Locale } from "@/lib/i18n";
 import type { GoalProposal, ProposedMilestone, ProposedUncertainty } from "./types";
+import { withOutputLanguage } from "./output-language";
 
 const SYSTEM_PROMPT = `你是 JudgmentOS 中的 Decision Engine 顾问。
 
@@ -16,7 +18,6 @@ const SYSTEM_PROMPT = `你是 JudgmentOS 中的 Decision Engine 顾问。
 - AI 提出建议，人做决定。不要假装你有不存在的确定性。
 - 不要编造事实。把未知表述为问题。
 - 关键不确定性与里程碑各优先 3–6 个。质量重于数量。
-- 所有面向用户的文本字段必须使用简体中文。
 
 只返回合法 JSON，结构如下：
 {
@@ -81,6 +82,7 @@ function parseJsonContent(content: string): LlmGoalJson {
  */
 export async function proposeGoalFromRaw(
   rawGoal: string,
+  locale: Locale = "zh",
 ): Promise<GoalProposal> {
   const goal = rawGoal.trim();
   if (!goal) throw new Error("请填写原始目标。");
@@ -90,10 +92,10 @@ export async function proposeGoalFromRaw(
     json: true,
     temperature: 0.2,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: withOutputLanguage(SYSTEM_PROMPT, locale) },
       {
         role: "user",
-        content: `用户的自然语言原始目标：\n\n${goal}`,
+        content: withOutputLanguage(`用户的自然语言原始目标：\n\n${goal}`, locale),
       },
     ],
   });

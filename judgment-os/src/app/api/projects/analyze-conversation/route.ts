@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { analyzeConversationInput } from "@/lib/decision-engine/analyze-conversation";
+import { getLocale } from "@/lib/locale.server";
 
 export const runtime = "nodejs";
 
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const analysis = await analyzeConversationInput(input);
+    const analysis = await analyzeConversationInput(input, await getLocale());
 
     return NextResponse.json({ analysis });
   } catch (error) {

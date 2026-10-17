@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { analyzeDeadlineChange } from "@/lib/decision-engine";
+import { getLocale } from "@/lib/locale.server";
 import {
   createMilestone,
   createUncertainty,
@@ -41,7 +42,7 @@ export async function updateProjectDeadlineAction(formData: FormData) {
         deadline: m.deadline,
         status: m.status,
       })),
-    });
+    }, await getLocale());
     analysisPayload = { ...analysisPayload, analysis };
   } catch (err) {
     console.error("Deadline analysis failed:", err);

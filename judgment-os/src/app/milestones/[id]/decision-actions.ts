@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { evaluateDecisionGate } from "@/lib/decision-engine";
+import { getLocale } from "@/lib/locale.server";
 import {
   confirmDecisionChoice,
   getDecision,
@@ -84,7 +85,7 @@ export async function runDecisionGateAction(
         userStatus: e.user_status,
       })),
       beliefUpdates: beliefPayload,
-    });
+    }, await getLocale());
 
     const decision = await saveDecisionFromGate({
       project_id: project.id,

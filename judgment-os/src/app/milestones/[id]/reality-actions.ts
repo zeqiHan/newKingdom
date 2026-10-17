@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { analyzeFeedback, proposeReplan } from "@/lib/decision-engine";
+import { getLocale } from "@/lib/locale.server";
 import {
   createExperiment,
   createFeedbackRecord,
@@ -84,6 +85,7 @@ export async function captureFeedbackAction(formData: FormData) {
 
   await updateMilestoneStatus(milestone_id, "FEEDBACK_REQUIRED");
 
+  const locale = await getLocale();
   let analysis;
   try {
     analysis = await analyzeFeedback({
@@ -96,7 +98,7 @@ export async function captureFeedbackAction(formData: FormData) {
       hypothesis: experiment?.hypothesis ?? "",
       expectedOutcome: expected,
       actualOutcome: actual,
-    });
+    }, locale);
   } catch (err) {
     console.error("Feedback analysis failed:", err);
     analysis = {
@@ -205,7 +207,7 @@ export async function captureFeedbackAction(formData: FormData) {
         })),
         recentFeedbackLearning: learning,
         triggerNote: `现实反馈已捕获（影响=${created.decision_impact}）`,
-      });
+      }, locale);
       const saved = await createPlanProposal({
         project_id: project.id,
         milestone_id,

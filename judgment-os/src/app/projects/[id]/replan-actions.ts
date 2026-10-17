@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { proposeReplan } from "@/lib/decision-engine";
+import { getLocale } from "@/lib/locale.server";
 import {
   appendMilestoneNote,
   createMilestone,
@@ -51,7 +52,7 @@ export async function proposeReplanAction(formData: FormData) {
     })),
     recentFeedbackLearning: recentLearning,
     triggerNote: trigger_note,
-  });
+  }, await getLocale());
 
   const saved = await createPlanProposal({
     project_id,

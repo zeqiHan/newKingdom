@@ -6,6 +6,7 @@ import {
   type GoalProposal,
 } from "@/lib/decision-engine";
 import { createProjectFromProposal } from "@/lib/db/queries";
+import { getLocale } from "@/lib/locale.server";
 
 export type ProposeGoalResult =
   | { ok: true; proposal: GoalProposal }
@@ -15,7 +16,7 @@ export async function proposeGoalAction(
   rawGoal: string,
 ): Promise<ProposeGoalResult> {
   try {
-    const proposal = await proposeGoalFromRaw(rawGoal);
+    const proposal = await proposeGoalFromRaw(rawGoal, await getLocale());
     return { ok: true, proposal };
   } catch (err) {
     const message =

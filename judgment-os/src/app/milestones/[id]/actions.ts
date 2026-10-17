@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { analyzeEvidenceBeliefUpdate } from "@/lib/decision-engine";
+import { getLocale } from "@/lib/locale.server";
 import {
   createEvidence,
   getEvidence,
@@ -74,7 +75,7 @@ export async function createEvidenceAction(formData: FormData) {
             userConfidence: created.confidence,
           },
           priorBeliefUpdates,
-        });
+        }, await getLocale());
 
         await saveBeliefUpdate({
           evidence_id: created.id,

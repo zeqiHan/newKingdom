@@ -5,6 +5,7 @@ import {
   analyzeEvidenceBeliefUpdate,
   runWebResearch,
 } from "@/lib/decision-engine";
+import { getLocale } from "@/lib/locale.server";
 import {
   createEvidence,
   getEvidence,
@@ -29,13 +30,14 @@ export async function runWebResearchAction(formData: FormData) {
 
   const { milestone, project, uncertainty } = workspace;
 
+  const locale = await getLocale();
   let bundle;
   try {
     bundle = await runWebResearch({
       researchQuestion: research_question,
       uncertaintyQuestion: uncertainty.question,
       milestoneTitle: milestone.title,
-    });
+    }, locale);
   } catch (err) {
     console.error("Web research failed:", err);
     redirect(`/milestones/${milestone_id}?research_error=1`);
@@ -81,7 +83,7 @@ export async function runWebResearchAction(formData: FormData) {
           userConfidence: created.confidence,
         },
         priorBeliefUpdates,
-      });
+      }, locale);
 
       const saved = await saveBeliefUpdate({
         evidence_id: created.id,

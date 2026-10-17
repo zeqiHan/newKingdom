@@ -1,4 +1,6 @@
 import { getLlmProvider } from "@/lib/llm";
+import type { Locale } from "@/lib/i18n";
+import { withOutputLanguage } from "./output-language";
 
 export type DeadlineChangeAnalysis = {
   benefitsOfCompression: string[];
@@ -22,7 +24,6 @@ const SYSTEM_PROMPT = `你是 JudgmentOS 的时间引擎顾问。
 硬性原则：
 - 用户拥有最终截止日期。
 - 暴露 tradeoff，不替用户决定。
-- 所有面向用户的文本使用简体中文。
 
 只返回合法 JSON：
 {
@@ -61,16 +62,16 @@ export async function analyzeDeadlineChange(input: {
   newUserDeadline: string | null;
   systemRecommendedDeadline: string | null;
   milestones: Array<{ title: string; deadline: string | null; status: string }>;
-}): Promise<DeadlineChangeAnalysis> {
+}, locale: Locale = "zh"): Promise<DeadlineChangeAnalysis> {
   const llm = getLlmProvider();
   const response = await llm.chat({
     json: true,
     temperature: 0.2,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: withOutputLanguage(SYSTEM_PROMPT, locale) },
       {
         role: "user",
-        content: `项目：${input.projectTitle}
+        content: withOutputLanguage(`项目：${input.projectTitle}
 目标：${input.projectGoal}
 
 原用户截止日期：${input.previousUserDeadline || "（无）"}
@@ -89,7 +90,7 @@ ${
         .join("\n")
 }
 
-请分析此次截止日期变更的利弊。`,
+请分析此次截止日期变更的利弊。`, locale),
       },
     ],
   });

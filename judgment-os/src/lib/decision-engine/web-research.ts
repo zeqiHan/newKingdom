@@ -1,4 +1,6 @@
 import { getLlmProvider } from "@/lib/llm";
+import type { Locale } from "@/lib/i18n";
+import { withOutputLanguage } from "./output-language";
 import { getWebSearchProvider } from "@/lib/research";
 import type { EvidenceType } from "@/lib/db/types";
 
@@ -21,7 +23,7 @@ export type WebResearchBundle = {
   provider: string;
 };
 
-const KEYWORD_PROMPT = `你是 JudgmentOS 调研助手。给定研究问题，生成 1–3 个短搜索关键词（英文或中文均可）。
+const KEYWORD_PROMPT = `你是 JudgmentOS 调研助手。给定研究问题，生成 1–3 个短搜索关键词。关键词不锁定中文或英文，用更能搜到资料的语言。
 只返回 JSON：{ "keywords": ["..."] }
 禁止无止境发散；关键词必须服务该不确定性。`;
 
@@ -35,7 +37,7 @@ const CLAIM_PROMPT = `你是 JudgmentOS Decision Engine 的外部证据提取顾
 - 行为证据强于口头意向
 - 最多提取 3 条最相关声称；宁缺毋滥
 - 每条必须带 sourceUrl
-- 所有面向用户的文本使用简体中文（claim/notes）；URL 保持原样
+- claim、sourceTitle、sourceSaid、notes 跟随界面语言；URL 保持原样
 
 只返回合法 JSON：
 {
@@ -84,7 +86,7 @@ export async function runWebResearch(input: {
   researchQuestion: string;
   uncertaintyQuestion: string;
   milestoneTitle: string;
-}): Promise<WebResearchBundle> {
+}, locale: Locale = "zh"): Promise<WebResearchBundle> {
   const question = input.researchQuestion.trim();
   if (!question) throw new Error("研究问题不能为空。");
 
@@ -127,17 +129,17 @@ export async function runWebResearch(input: {
     json: true,
     temperature: 0.2,
     messages: [
-      { role: "system", content: CLAIM_PROMPT },
+      { role: "system", content: withOutputLanguage(CLAIM_PROMPT, locale) },
       {
         role: "user",
-        content: `研究问题：${question}
+        content: withOutputLanguage(`研究问题：${question}
 不确定性：${input.uncertaintyQuestion}
 搜索摘要：${searchRes.combinedAnswer || "—"}
 
 搜索结果：
 ${corpus || "（无）"}
 
-请提取最多 3 条带来源的声称。记住：来源所说 ≠ 事实为真。`,
+请提取最多 3 条带来源的声称。记住：来源所说 ≠ 事实为真。`, locale),
       },
     ],
   });

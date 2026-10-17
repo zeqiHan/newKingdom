@@ -1,4 +1,6 @@
 import { getLlmProvider } from "@/lib/llm";
+import type { Locale } from "@/lib/i18n";
+import { withOutputLanguage } from "./output-language";
 import type {
   DecisionGateEvaluation,
   DecisionGateOption,
@@ -20,7 +22,6 @@ const SYSTEM_PROMPT = `你是 JudgmentOS Decision Engine 中的 Decision Gate（
 - 禁止替用户做最终决定；你只推荐并解释理由。
 - 禁止隐藏 tradeoff、未知项或做错的代价。
 - 不要把意见包装成事实。
-- 所有面向用户的文本使用简体中文。
 
 评估时必须显式回答这 7 个问题（写入对应字段）：
 1. 该不确定性当前阻塞了什么决策？
@@ -169,6 +170,7 @@ export type EvaluateDecisionGateInput = {
  */
 export async function evaluateDecisionGate(
   input: EvaluateDecisionGateInput,
+  locale: Locale = "zh",
 ): Promise<DecisionGateEvaluation> {
   const llm = getLlmProvider();
 
@@ -196,10 +198,10 @@ export async function evaluateDecisionGate(
     json: true,
     temperature: 0.2,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: withOutputLanguage(SYSTEM_PROMPT, locale) },
       {
         role: "user",
-        content: `项目：${input.projectTitle}
+        content: withOutputLanguage(`项目：${input.projectTitle}
 目标：${input.projectGoal}
 成功标准：${input.successCriteria || "—"}
 约束：${input.constraints || "—"}
@@ -219,7 +221,7 @@ ${evidenceText}
 信念更新历史：
 ${beliefText}
 
-请运行 Decision Gate：回答 7 问，给出 KEEP_RESEARCHING / MAKE_PROVISIONAL_DECISION / READY_TO_FREEZE 之一，并解释 WHY。`,
+请运行 Decision Gate：回答 7 问，给出 KEEP_RESEARCHING / MAKE_PROVISIONAL_DECISION / READY_TO_FREEZE 之一，并解释 WHY。`, locale),
       },
     ],
   });

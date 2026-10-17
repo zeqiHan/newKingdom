@@ -1,4 +1,6 @@
 import { getLlmProvider } from "@/lib/llm";
+import type { Locale } from "@/lib/i18n";
+import { withOutputLanguage } from "./output-language";
 
 export type FeedbackAnalysis = {
   difference: string;
@@ -22,7 +24,6 @@ const SYSTEM_PROMPT = `你是 JudgmentOS Decision Engine 中的现实反馈分�
 - 口头兴趣弱于真实付款/真实行为。
 - 禁止虚假确定性；保留未知。
 - AI 分析；人可覆盖并决定是否重开决策。
-- 所有面向用户的文本使用简体中文。
 
 只返回合法 JSON：
 {
@@ -88,16 +89,17 @@ export type AnalyzeFeedbackInput = {
 
 export async function analyzeFeedback(
   input: AnalyzeFeedbackInput,
+  locale: Locale = "zh",
 ): Promise<FeedbackAnalysis> {
   const llm = getLlmProvider();
   const response = await llm.chat({
     json: true,
     temperature: 0.2,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: withOutputLanguage(SYSTEM_PROMPT, locale) },
       {
         role: "user",
-        content: `不确定性：${input.uncertaintyQuestion}
+        content: withOutputLanguage(`不确定性：${input.uncertaintyQuestion}
 先前信心（仅供上下文，禁止硬阈值）：${input.priorConfidence}
 
 相关决策：${input.decisionQuestion || "—"}
@@ -112,7 +114,7 @@ ${input.expectedOutcome}
 实际结果：
 ${input.actualOutcome}
 
-请分析现实反馈对信念与决策的影响。`,
+请分析现实反馈对信念与决策的影响。`, locale),
       },
     ],
   });
