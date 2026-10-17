@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { useCopy } from "@/components/locale-provider";
 import { runDecisionGateAction } from "./decision-actions";
 
 export function DecisionGatePanel({
@@ -15,6 +16,7 @@ export function DecisionGatePanel({
   lockedByActiveDecision: boolean;
 }) {
   const router = useRouter();
+  const copy = useCopy();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -33,7 +35,7 @@ export function DecisionGatePanel({
   if (!hasUncertainty) {
     return (
       <p className="text-xs text-black/50 dark:text-white/50">
-        未关联不确定性时无法运行 Decision Gate。
+        {copy("gateNeedsUncertainty")}
       </p>
     );
   }
@@ -41,11 +43,11 @@ export function DecisionGatePanel({
   return (
     <div className="space-y-2">
       <p className="text-xs text-black/50 dark:text-white/50">
-        Belief Update → Decision Gate。AI 只推荐；你做最终选择。不使用任意信心阈值，也不要求确定性。
+        {copy("gateLead")}
       </p>
       {lockedByActiveDecision ? (
         <p className="text-xs text-black/50 dark:text-white/50">
-          当前已有临时/冻结决策。若要重新评估，请先「重开决策」。
+          {copy("gateLocked")}
         </p>
       ) : (
         <button
@@ -54,7 +56,7 @@ export function DecisionGatePanel({
           disabled={pending}
           className="border border-black/30 px-3 py-1 text-sm disabled:opacity-50 dark:border-white/30"
         >
-          {pending ? "评估中…" : "运行 Decision Gate"}
+          {pending ? copy("evaluating") : copy("runGate")}
         </button>
       )}
       {error ? (

@@ -8,6 +8,8 @@
  */
 
 import { useState } from "react";
+import { useCopy, useLocale } from "@/components/locale-provider";
+import { enumLabel } from "@/lib/i18n";
 import type { Sacrifice, SacrificeCategory } from "@/lib/db/schema";
 
 type SacrificeDeclarationProps = {
@@ -47,6 +49,8 @@ export function SacrificeDeclaration({
   level,
   loading = false,
 }: SacrificeDeclarationProps) {
+  const copy = useCopy();
+  const locale = useLocale();
   const [editingSacrificeId, setEditingSacrificeId] = useState<string | null>(null);
   const [editedSacrifices, setEditedSacrifices] = useState<Sacrifice[]>(sacrifices);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -118,13 +122,13 @@ export function SacrificeDeclaration({
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-amber-900 mb-2">
           {level === "project" 
-            ? "What are you willing to sacrifice?" 
-            : "What will this action require you to sacrifice?"}
+            ? copy("sacrificeProjectQ")
+            : copy("sacrificeActionQ")}
         </h3>
         <p className="text-sm text-amber-800">
           {level === "project"
-            ? "Every goal requires tradeoffs. Be honest about what you're willing to give up to achieve this."
-            : "This specific action has costs. Understanding them now prevents regret later."}
+            ? copy("sacrificeProjectBody")
+            : copy("sacrificeActionBody")}
         </p>
       </div>
 
@@ -147,16 +151,16 @@ export function SacrificeDeclaration({
                   <span
                     className={`px-2 py-1 text-xs font-medium rounded border ${colorClass}`}
                   >
-                    {sacrifice.category}
+                    {enumLabel(locale, "sacrifice", sacrifice.category)}
                   </span>
                   {sacrifice.userModified && (
                     <span className="px-2 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded">
-                      Modified
+                      {copy("modified")}
                     </span>
                   )}
                   {sacrifice.aiGenerated && !sacrifice.userModified && (
                     <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 border border-gray-200 rounded">
-                      AI-suggested
+                      {copy("aiSuggested")}
                     </span>
                   )}
                 </div>
@@ -169,7 +173,7 @@ export function SacrificeDeclaration({
                     }
                     className="text-sm text-blue-600 hover:text-blue-800"
                   >
-                    {isEditing ? "Save" : "Edit"}
+                    {isEditing ? copy("save") : copy("edit")}
                   </button>
                 )}
               </div>
@@ -178,7 +182,7 @@ export function SacrificeDeclaration({
                 <div className="space-y-2">
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Category
+                      {copy("category")}
                     </label>
                     <select
                       value={sacrifice.category}
@@ -191,17 +195,16 @@ export function SacrificeDeclaration({
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
                     >
-                      <option value="TIME">TIME</option>
-                      <option value="QUALITY">QUALITY</option>
-                      <option value="SCOPE">SCOPE</option>
-                      <option value="RESOURCE">RESOURCE</option>
-                      <option value="RISK">RISK</option>
-                      <option value="OTHER">OTHER</option>
+                      {(["TIME", "QUALITY", "SCOPE", "RESOURCE", "RISK", "OTHER"] as const).map((code) => (
+                        <option key={code} value={code}>
+                          {enumLabel(locale, "sacrifice", code)}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
-                      What will be sacrificed
+                      {copy("whatWillBeSacrificed")}
                     </label>
                     <input
                       type="text"
@@ -218,7 +221,7 @@ export function SacrificeDeclaration({
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Impact / Consequence
+                      {copy("impact")}
                     </label>
                     <textarea
                       value={sacrifice.impact}
@@ -237,7 +240,7 @@ export function SacrificeDeclaration({
                     onClick={handleCancelEdit}
                     className="text-sm text-gray-600 hover:text-gray-800"
                   >
-                    Cancel
+                    {copy("cancel")}
                   </button>
                 </div>
               ) : (
@@ -251,7 +254,7 @@ export function SacrificeDeclaration({
 
               {sacrifice.acceptedAt && (
                 <div className="mt-2 text-xs text-green-600">
-                  ✓ Accepted on {new Date(sacrifice.acceptedAt).toLocaleString()}
+                  {copy("acceptedOn", { time: new Date(sacrifice.acceptedAt).toLocaleString(locale === "en" ? "en" : "zh-CN") })}
                 </div>
               )}
             </div>
@@ -266,14 +269,14 @@ export function SacrificeDeclaration({
             disabled={isSubmitting}
             className="flex-1 px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
           >
-            {isSubmitting ? "Accepting..." : "Accept These Sacrifices"}
+            {isSubmitting ? copy("accepting") : copy("acceptSacrifices")}
           </button>
           {onAddCustom && (
             <button
               onClick={onAddCustom}
               className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 text-sm"
             >
-              + Add Custom
+              {copy("addCustom")}
             </button>
           )}
         </div>
@@ -281,8 +284,7 @@ export function SacrificeDeclaration({
 
       {isAccepted && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
-          ✓ Sacrifices accepted. You've made the tradeoffs explicit and taken
-          ownership of the costs.
+          {copy("sacrificesAccepted")}
         </div>
       )}
     </div>
