@@ -55,7 +55,7 @@ export function ConversationInput({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <div className="relative">
+      <div>
         {multiline ? (
           <textarea
             value={message}
@@ -64,7 +64,7 @@ export function ConversationInput({
             placeholder={placeholderText}
             disabled={disabled || isSubmitting}
             rows={6}
-            className="w-full px-4 py-3 border border-black/20 dark:border-white/20 bg-transparent rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 disabled:opacity-50 font-normal"
+            className="w-full border border-black/20 bg-transparent px-2 py-1 text-sm dark:border-white/20 disabled:opacity-50"
           />
         ) : (
           <input
@@ -74,11 +74,11 @@ export function ConversationInput({
             onKeyDown={handleKeyDown}
             placeholder={placeholderText}
             disabled={disabled || isSubmitting}
-            className="w-full px-4 py-3 border border-black/20 dark:border-white/20 bg-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 disabled:opacity-50"
+            className="w-full border border-black/20 bg-transparent px-2 py-1 text-sm dark:border-white/20 disabled:opacity-50"
           />
         )}
         
-        <div className="absolute bottom-3 right-3 text-xs text-black/40 dark:text-white/40">
+        <div className="mt-1 text-xs text-black/40 dark:text-white/40">
           {multiline && copy("submitShortcut")}
         </div>
       </div>
@@ -90,7 +90,7 @@ export function ConversationInput({
         <button
           type="submit"
           disabled={!message.trim() || disabled || isSubmitting}
-          className="px-6 py-2 bg-black text-white dark:bg-white dark:text-black rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-opacity"
+          className="border border-black/30 px-3 py-1 text-sm disabled:opacity-40 dark:border-white/30"
         >
           {isSubmitting ? copy("analyzing") : submitText}
         </button>
@@ -120,7 +120,7 @@ export function ConversationExamples({ onSelectExample }: { onSelectExample: (ex
           <button
             key={i}
             onClick={() => onSelectExample(example.text)}
-            className="w-full text-left p-3 border border-black/10 dark:border-white/10 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="w-full border border-black/10 p-3 text-left dark:border-white/10"
           >
             <p className="font-medium text-xs text-black/70 dark:text-white/70 mb-1">
               {example.label}

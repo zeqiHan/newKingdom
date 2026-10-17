@@ -72,9 +72,9 @@ export function ConversationCreatePanel() {
   };
 
   return (
-    <div className="border border-black/10 dark:border-white/10 p-6 space-y-6">
+    <div className="space-y-3">
       <div>
-        <h2 className="text-lg font-semibold mb-2">
+        <h2 className="text-sm font-medium tracking-wide text-black/50 dark:text-white/50">
           {copy("conversationTitle")}
         </h2>
         <p className="text-sm text-black/60 dark:text-white/60">
@@ -94,9 +94,9 @@ export function ConversationCreatePanel() {
           <ConversationExamples onSelectExample={setInputValue} />
 
           {inputValue && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-sm">
+            <p className="text-xs text-black/50 dark:text-white/50">
               {copy("exampleChosen")}
-            </div>
+            </p>
           )}
         </>
       ) : (
@@ -106,13 +106,13 @@ export function ConversationCreatePanel() {
           <div className="flex gap-3">
             <button
               onClick={handleCreate}
-              className="flex-1 px-4 py-3 bg-black text-white dark:bg-white dark:text-black rounded-lg hover:opacity-90 font-medium"
+              className="border border-black/30 px-3 py-1 text-sm dark:border-white/30"
             >
               {copy("createProject")}
             </button>
             <button
               onClick={handleEdit}
-              className="px-4 py-3 border border-black/30 dark:border-white/30 rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
+              className="border border-black/30 px-3 py-1 text-sm dark:border-white/30"
             >
               {copy("reenter")}
             </button>
@@ -125,9 +125,9 @@ export function ConversationCreatePanel() {
       )}
 
       {error && (
-        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-800 dark:text-red-200">
+        <p className="text-sm text-red-700 dark:text-red-400">
           {error}
-        </div>
+        </p>
       )}
     </div>
   );
@@ -145,17 +145,13 @@ function ProjectAnalysisPreview({
   return (
     <div className="space-y-3">
       {/* Summary Card */}
-      <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <h3 className="font-semibold text-lg">{analysis.title}</h3>
-            <p className="text-sm text-black/70 dark:text-white/70 mt-1">
-              {analysis.goal}
-            </p>
-          </div>
-          <span className="text-xs px-2 py-1 bg-green-200 dark:bg-green-800 rounded">
-            {copy("aiAnalyzed")}
-          </span>
+      <div className="border border-dashed border-black/20 p-3 dark:border-white/20">
+        <div className="mb-3">
+          <p className="text-xs text-black/40 dark:text-white/40">{copy("aiAnalyzed")}</p>
+          <h3 className="mt-1 font-medium">{analysis.title}</h3>
+          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+            {analysis.goal}
+          </p>
         </div>
 
         <div className="mb-3 space-y-1 text-xs text-black/70 dark:text-white/70">
@@ -191,7 +187,7 @@ function ProjectAnalysisPreview({
 
       {/* Detailed View */}
       {showDetails && (
-        <div className="space-y-4 p-4 border border-black/10 dark:border-white/10 rounded-lg text-sm">
+        <div className="space-y-4 border border-black/10 p-3 text-sm dark:border-white/10">
           <Section title={copy("goalsAndCriteria")}>
             <Field label={copy("goal")} value={analysis.goal} />
             <Field label={copy("successCriteria")} value={analysis.successCriteria} />
@@ -199,15 +195,14 @@ function ProjectAnalysisPreview({
           </Section>
 
           <Section title={copy("sacrificeDecl")}>
-            {analysis.willingSacrifices.map((s: Sacrifice, i: number) => (
-              <div key={s.id} className="p-2 bg-black/5 dark:bg-white/5 rounded">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs px-2 py-0.5 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded">
-                    {s.category}
-                  </span>
-                  <span className="font-medium">{s.description}</span>
-                </div>
-                <p className="text-xs text-black/60 dark:text-white/60">
+            {analysis.willingSacrifices.map((s: Sacrifice) => (
+              <div key={s.id}>
+                <p>
+                  <span className="text-xs text-black/40 dark:text-white/40">{s.category}</span>
+                  {" "}
+                  {s.description}
+                </p>
+                <p className="text-xs text-black/50 dark:text-white/50">
                   {s.impact}
                 </p>
               </div>
@@ -230,7 +225,7 @@ function ProjectAnalysisPreview({
 
           <Section title={copy("milestones")}>
             {analysis.suggestedMilestones.map((m, i) => (
-              <div key={m.tempId} className="p-2 bg-black/5 dark:bg-white/5 rounded">
+              <div key={m.tempId}>
                 <p className="font-medium">{i + 1}. {m.title}</p>
                 <p className="text-xs text-black/60 dark:text-white/60 mt-1">
                   {copy("expectedLearningOf", { text: m.expectedLearning })}

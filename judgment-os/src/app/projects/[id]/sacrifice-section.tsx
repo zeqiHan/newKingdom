@@ -120,12 +120,9 @@ export function SacrificeSection({
         )}
 
         {isGenerating && (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-            <span className="ml-3 text-sm text-black/60 dark:text-white/60">
-              {copy("generatingSacrifices")}
-            </span>
-          </div>
+          <p className="text-sm text-black/50 dark:text-white/50">
+            {copy("generatingSacrifices")}
+          </p>
         )}
 
         {hasSacrifices && (
@@ -147,9 +144,9 @@ export function SacrificeSection({
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded text-sm">
+          <p className="text-sm text-red-700 dark:text-red-400">
             {copy("errorPrefix", { message: error })}
-          </div>
+          </p>
         )}
 
         {!hasSacrifices && (

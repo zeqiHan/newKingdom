@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { useCopy, useLocale } from "@/components/locale-provider";
 import { enumLabel } from "@/lib/i18n";
-import type { Sacrifice, SacrificeCategory } from "@/lib/db/schema";
+import type { Sacrifice } from "@/lib/db/schema";
 
 type SacrificeDeclarationProps = {
   sacrifices: Sacrifice[];
@@ -22,23 +22,12 @@ type SacrificeDeclarationProps = {
   loading?: boolean;
 };
 
-const CATEGORY_COLORS: Record<SacrificeCategory, string> = {
-  TIME: "bg-orange-100 text-orange-800 border-orange-300",
-  QUALITY: "bg-red-100 text-red-800 border-red-300",
-  SCOPE: "bg-blue-100 text-blue-800 border-blue-300",
-  RESOURCE: "bg-purple-100 text-purple-800 border-purple-300",
-  RISK: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  OTHER: "bg-gray-100 text-gray-800 border-gray-300",
-};
+const CATEGORY_CODES = ["TIME", "QUALITY", "SCOPE", "RESOURCE", "RISK", "OTHER"] as const;
 
-const CATEGORY_ICONS: Record<SacrificeCategory, string> = {
-  TIME: "⏱️",
-  QUALITY: "⚠️",
-  SCOPE: "🎯",
-  RESOURCE: "💰",
-  RISK: "🎲",
-  OTHER: "📋",
-};
+const fieldClass =
+  "w-full border border-black/20 bg-transparent px-2 py-1 text-sm dark:border-white/20";
+const buttonClass =
+  "border border-black/30 px-3 py-1 text-sm disabled:opacity-40 dark:border-white/30";
 
 export function SacrificeDeclaration({
   sacrifices,
@@ -111,21 +100,19 @@ export function SacrificeDeclaration({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
+      <p className="text-sm text-black/50 dark:text-white/50">{copy("generatingSacrifices")}</p>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-amber-900 mb-2">
-          {level === "project" 
+    <div className="space-y-3 text-sm">
+      <div className="border border-dashed border-black/20 p-3 dark:border-white/20">
+        <p className="font-medium">
+          {level === "project"
             ? copy("sacrificeProjectQ")
             : copy("sacrificeActionQ")}
-        </h3>
-        <p className="text-sm text-amber-800">
+        </p>
+        <p className="mt-1 text-xs text-black/50 dark:text-white/50">
           {level === "project"
             ? copy("sacrificeProjectBody")
             : copy("sacrificeActionBody")}
@@ -133,45 +120,32 @@ export function SacrificeDeclaration({
       </div>
 
       <div className="space-y-3">
-        {editedSacrifices.map((sacrifice, index) => {
+        {editedSacrifices.map((sacrifice) => {
           const isEditing = editingSacrificeId === sacrifice.id;
-          const colorClass = CATEGORY_COLORS[sacrifice.category];
-          const icon = CATEGORY_ICONS[sacrifice.category];
+          const marks = [
+            sacrifice.userModified ? copy("modified") : null,
+            sacrifice.aiGenerated && !sacrifice.userModified ? copy("aiSuggested") : null,
+          ].filter(Boolean);
 
           return (
             <div
               key={sacrifice.id}
-              className={`border rounded-lg p-4 ${
-                isAccepted ? "bg-gray-50" : "bg-white"
-              }`}
+              className="border border-black/10 p-3 dark:border-white/10"
             >
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">{icon}</span>
-                  <span
-                    className={`px-2 py-1 text-xs font-medium rounded border ${colorClass}`}
-                  >
-                    {enumLabel(locale, "sacrifice", sacrifice.category)}
-                  </span>
-                  {sacrifice.userModified && (
-                    <span className="px-2 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded">
-                      {copy("modified")}
-                    </span>
-                  )}
-                  {sacrifice.aiGenerated && !sacrifice.userModified && (
-                    <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 border border-gray-200 rounded">
-                      {copy("aiSuggested")}
-                    </span>
-                  )}
-                </div>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs text-black/40 dark:text-white/40">
+                  {enumLabel(locale, "sacrifice", sacrifice.category)}
+                  {marks.length > 0 ? ` · ${marks.join(" · ")}` : ""}
+                </p>
                 {!isAccepted && (
                   <button
+                    type="button"
                     onClick={() =>
                       isEditing
                         ? handleSaveEdit(sacrifice.id)
                         : handleEdit(sacrifice.id)
                     }
-                    className="text-sm text-blue-600 hover:text-blue-800"
+                    className={buttonClass}
                   >
                     {isEditing ? copy("save") : copy("edit")}
                   </button>
@@ -179,11 +153,9 @@ export function SacrificeDeclaration({
               </div>
 
               {isEditing ? (
-                <div className="space-y-2">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      {copy("category")}
-                    </label>
+                <div className="mt-2 space-y-2">
+                  <label className="block space-y-1">
+                    <span className="text-xs text-black/50 dark:text-white/50">{copy("category")}</span>
                     <select
                       value={sacrifice.category}
                       onChange={(e) =>
@@ -193,19 +165,17 @@ export function SacrificeDeclaration({
                           e.target.value
                         )
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                      className={fieldClass}
                     >
-                      {(["TIME", "QUALITY", "SCOPE", "RESOURCE", "RISK", "OTHER"] as const).map((code) => (
+                      {CATEGORY_CODES.map((code) => (
                         <option key={code} value={code}>
                           {enumLabel(locale, "sacrifice", code)}
                         </option>
                       ))}
                     </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      {copy("whatWillBeSacrificed")}
-                    </label>
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs text-black/50 dark:text-white/50">{copy("whatWillBeSacrificed")}</span>
                     <input
                       type="text"
                       value={sacrifice.description}
@@ -216,13 +186,11 @@ export function SacrificeDeclaration({
                           e.target.value
                         )
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                      className={fieldClass}
                     />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      {copy("impact")}
-                    </label>
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs text-black/50 dark:text-white/50">{copy("impact")}</span>
                     <textarea
                       value={sacrifice.impact}
                       onChange={(e) =>
@@ -233,29 +201,24 @@ export function SacrificeDeclaration({
                         )
                       }
                       rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                      className={fieldClass}
                     />
-                  </div>
-                  <button
-                    onClick={handleCancelEdit}
-                    className="text-sm text-gray-600 hover:text-gray-800"
-                  >
+                  </label>
+                  <button type="button" onClick={handleCancelEdit} className={buttonClass}>
                     {copy("cancel")}
                   </button>
                 </div>
               ) : (
-                <div>
-                  <p className="font-medium text-gray-900 mb-1">
-                    {sacrifice.description}
-                  </p>
-                  <p className="text-sm text-gray-600">{sacrifice.impact}</p>
+                <div className="mt-2">
+                  <p>{sacrifice.description}</p>
+                  <p className="mt-1 text-xs text-black/50 dark:text-white/50">{sacrifice.impact}</p>
                 </div>
               )}
 
               {sacrifice.acceptedAt && (
-                <div className="mt-2 text-xs text-green-600">
+                <p className="mt-2 text-xs text-black/40 dark:text-white/40">
                   {copy("acceptedOn", { time: new Date(sacrifice.acceptedAt).toLocaleString(locale === "en" ? "en" : "zh-CN") })}
-                </div>
+                </p>
               )}
             </div>
           );
@@ -263,19 +226,17 @@ export function SacrificeDeclaration({
       </div>
 
       {!isAccepted && (
-        <div className="flex gap-3 pt-4 border-t">
+        <div className="flex flex-wrap gap-2">
           <button
+            type="button"
             onClick={handleAccept}
             disabled={isSubmitting}
-            className="flex-1 px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+            className={buttonClass}
           >
             {isSubmitting ? copy("accepting") : copy("acceptSacrifices")}
           </button>
           {onAddCustom && (
-            <button
-              onClick={onAddCustom}
-              className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 text-sm"
-            >
+            <button type="button" onClick={onAddCustom} className={buttonClass}>
               {copy("addCustom")}
             </button>
           )}
@@ -283,9 +244,9 @@ export function SacrificeDeclaration({
       )}
 
       {isAccepted && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
+        <p className="border border-dashed border-black/20 p-3 text-xs text-black/50 dark:border-white/20 dark:text-white/50">
           {copy("sacrificesAccepted")}
-        </div>
+        </p>
       )}
     </div>
   );
